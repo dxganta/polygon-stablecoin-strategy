@@ -89,7 +89,7 @@ abstract contract BaseStrategy is PausableUpgradeable, SettAccessControl {
     }
 
     /// ===== View Functions =====
-    function baseStrategyVersion() public view returns (string memory) {
+    function baseStrategyVersion() public pure returns (string memory) {
         return "1.2";
     }
 

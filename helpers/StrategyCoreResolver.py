@@ -45,8 +45,10 @@ class StrategyCoreResolver:
         want = self.manager.want
         sett = self.manager.sett
 
-        calls = self.add_entity_balances_for_tokens(calls, "want", want, entities)
-        calls = self.add_entity_balances_for_tokens(calls, "sett", sett, entities)
+        calls = self.add_entity_balances_for_tokens(
+            calls, "want", want, entities)
+        calls = self.add_entity_balances_for_tokens(
+            calls, "sett", sett, entities)
         return calls
 
     def add_sett_snap(self, calls):
@@ -56,7 +58,8 @@ class StrategyCoreResolver:
             Call(sett.address, [func.sett.balance], [["sett.balance", as_wei]])
         )
         calls.append(
-            Call(sett.address, [func.sett.available], [["sett.available", as_wei]])
+            Call(sett.address, [func.sett.available],
+                 [["sett.available", as_wei]])
         )
         calls.append(
             Call(
@@ -66,7 +69,8 @@ class StrategyCoreResolver:
             )
         )
         calls.append(
-            Call(sett.address, [func.erc20.totalSupply], [["sett.totalSupply", as_wei]])
+            Call(sett.address, [func.erc20.totalSupply],
+                 [["sett.totalSupply", as_wei]])
         )
 
         return calls
@@ -74,6 +78,13 @@ class StrategyCoreResolver:
     def add_strategy_snap(self, calls, entities=None):
         strategy = self.manager.strategy
 
+        calls.append(
+            Call(
+                strategy.address,
+                [func.strategy.isTendable],
+                [["strategy.isTendable", as_wei]]
+            )
+        )
         calls.append(
             Call(
                 strategy.address,
@@ -151,7 +162,8 @@ class StrategyCoreResolver:
         if before.balances("want", "sett") <= 1:
             return
 
-        assert after.balances("want", "sett") <= before.balances("want", "sett")
+        assert after.balances(
+            "want", "sett") <= before.balances("want", "sett")
 
         # All want should be in pool OR sitting in strategy, not a mix
         assert (
@@ -159,12 +171,15 @@ class StrategyCoreResolver:
             and after.get("strategy.balanceOfPool")
             > before.get("strategy.balanceOfPool")
         ) or (
-            after.get("strategy.balanceOfWant") > before.get("strategy.balanceOfWant")
+            after.get("strategy.balanceOfWant") > before.get(
+                "strategy.balanceOfWant")
             and after.get("strategy.balanceOfPool") == 0
         )
 
-        assert after.get("strategy.balanceOf") > before.get("strategy.balanceOf")
-        assert after.balances("want", "user") == before.balances("want", "user")
+        assert after.get("strategy.balanceOf") > before.get(
+            "strategy.balanceOf")
+        assert after.balances(
+            "want", "user") == before.balances("want", "user")
 
         self.hook_after_earn(before, after, params)
 
@@ -183,9 +198,11 @@ class StrategyCoreResolver:
         self.manager.printCompare(before, after)
 
         if params["amount"] == 0:
-            assert after.get("sett.totalSupply") == before.get("sett.totalSupply")
+            assert after.get("sett.totalSupply") == before.get(
+                "sett.totalSupply")
             # Decrease the Sett tokens for the user based on withdrawAmount and pricePerFullShare
-            assert after.balances("sett", "user") == before.balances("sett", "user")
+            assert after.balances(
+                "sett", "user") == before.balances("sett", "user")
             return
 
         # Decrease the totalSupply of Sett tokens
@@ -196,7 +213,8 @@ class StrategyCoreResolver:
 
         # Decrease the want in the Sett, if there was idle want
         if before.balances("want", "sett") > 0:
-            assert after.balances("want", "sett") < before.balances("want", "sett")
+            assert after.balances(
+                "want", "sett") < before.balances("want", "sett")
 
             # Available in the sett should decrease if want decreased
             assert after.get("sett.available") <= before.get("sett.available")
@@ -239,7 +257,8 @@ class StrategyCoreResolver:
             before.get("strategy.withdrawalFee") > 0
             and
             # Fees are only processed when withdrawing from the strategy.
-            before.balances("want", "strategy") > after.balances("want", "strategy")
+            before.balances("want", "strategy") > after.balances(
+                "want", "strategy")
         ):
             assert after.balances("want", "governanceRewards") > before.balances(
                 "want", "governanceRewards"
@@ -259,7 +278,8 @@ class StrategyCoreResolver:
         console.print("=== Compare Deposit ===")
         self.manager.printCompare(before, after)
 
-        expected_shares = Decimal(params["amount"] * Wei("1 ether")) / Decimal(ppfs)
+        expected_shares = Decimal(
+            params["amount"] * Wei("1 ether")) / Decimal(ppfs)
         if params.get("expected_shares") is not None:
             expected_shares = params["expected_shares"]
 
@@ -313,7 +333,6 @@ class StrategyCoreResolver:
             Use this to verify that balances in the get_strategy_destinations are properly set
         """
         assert False
-
 
     def confirm_harvest(self, before, after, tx):
         """

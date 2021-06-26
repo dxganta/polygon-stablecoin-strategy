@@ -1,16 +1,20 @@
-## Ideally, they have one file with the settings for the strat and deployment
-## This file would allow them to configure so they can test, deploy and interact with the strategy
+# Ideally, they have one file with the settings for the strat and deployment
+# This file would allow them to configure so they can test, deploy and interact with the strategy
 
 BADGER_DEV_MULTISIG = "0xb65cef03b9b89f99517643226d76e286ee999e77"
 
-WANT = "0x6b175474e89094c44da98b954eedeac495271d0f" ## Dai
-LP_COMPONENT = "0x028171bca77440897b824ca71d1c56cac55b68a3" ## aDAI
-REWARD_TOKEN = "0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9" ## AAVE Token
+# For the Polygon Mainnet
+WANT = "0x8f3cf7ad23cd3cadbd9735aff958023239c6a063"  # Dai
+AM_DAI = "0x27F8D03b3a2196956ED754baDc28D73be8830A6e"  # amDAI
+AM_USDC = "0x1a13F4Ca1d028320A707D99520AbFefca3998b7F"  # amUSDC
+AM_USDT = "0x60D55F02A771d515e077c9C2403a1ef324885CeC"  # amUSDT
+REWARD_TOKEN = "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270"  # WMATIC Token
 
-PROTECTED_TOKENS = [WANT, LP_COMPONENT, REWARD_TOKEN]
-## Fees in Basis Points
+PROTECTED_TOKENS = [WANT, AM_DAI, AM_USDC, AM_USDT, REWARD_TOKEN]
+#  Fees in Basis Points
 DEFAULT_GOV_PERFORMANCE_FEE = 1000
 DEFAULT_PERFORMANCE_FEE = 1000
 DEFAULT_WITHDRAWAL_FEE = 75
 
-FEES = [DEFAULT_GOV_PERFORMANCE_FEE, DEFAULT_PERFORMANCE_FEE, DEFAULT_WITHDRAWAL_FEE]
+FEES = [DEFAULT_GOV_PERFORMANCE_FEE,
+        DEFAULT_PERFORMANCE_FEE, DEFAULT_WITHDRAWAL_FEE]
