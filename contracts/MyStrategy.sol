@@ -47,9 +47,10 @@ contract MyStrategy is BaseStrategy {
 
     // allocations to different pools in percent
     uint16 public constant ALLOC_DECIMALS = 1000;
-    uint16 public daiPoolPercent = 350;
-    uint16 public usdcPoolPercent = 280;
-    uint16 public usdtPoolPercent = 370;
+    uint16 public daiPoolPercent = 210;
+    uint16 public usdcPoolPercent = 170;
+    uint16 public usdtPoolPercent = 220;
+    uint16 public curvePoolPercent = 400;
 
     function initialize(
         address _governance,
@@ -81,9 +82,6 @@ contract MyStrategy is BaseStrategy {
         IERC20Upgradeable(reward).safeApprove(QUICKSWAP_ROUTER, type(uint256).max);
         IERC20Upgradeable(want).safeApprove(CURVE_POOL, type(uint256).max);
 
-        IERC20Upgradeable(amDAI).safeApprove(CURVE_POOL, type(uint256).max);
-        IERC20Upgradeable(amUSDC).safeApprove(CURVE_POOL, type(uint256).max);
-        IERC20Upgradeable(amUSDT).safeApprove(CURVE_POOL, type(uint256).max);
     }
 
     /// ===== View Functions =====
@@ -146,35 +144,63 @@ contract MyStrategy is BaseStrategy {
     /// @notice Just get the current balance and then invest accordingly
     function _deposit(uint256 _amount) internal override {
         // get respective amount of tokens for each pool according to their allocation percentage
-        uint256 usdcAmount = _amount.mul(usdcPoolPercent).div(ALLOC_DECIMALS);
-        uint256 usdtAmount = _amount.mul(usdtPoolPercent).div(ALLOC_DECIMALS);
-        uint256 daiAmount = _amount.sub(usdcAmount.add(usdtAmount));
+        uint256 usdcAmt = _amount.mul(usdcPoolPercent).div(ALLOC_DECIMALS);
+        uint256 usdtAmt = _amount.mul(usdtPoolPercent).div(ALLOC_DECIMALS);
+        uint256 daiAmt = _amount.mul(daiPoolPercent).div(ALLOC_DECIMALS);
+
+        uint256 curveDaiAmt = _amount.sub(usdcAmt.add(usdtAmt).add(daiAmt));
 
         // dai to usdc
-       usdcAmount =  ICurveExchange(CURVE_POOL).exchange_underlying(CURVE_DAI_INDEX, CURVE_USDC_INDEX, usdcAmount, 1);
-
+       usdcAmt =  ICurveExchange(CURVE_POOL).exchange_underlying(CURVE_DAI_INDEX, CURVE_USDC_INDEX, usdcAmt, 1);
         // dai to usdt
-       usdtAmount =  ICurveExchange(CURVE_POOL).exchange_underlying(CURVE_DAI_INDEX, CURVE_USDT_INDEX, usdtAmount, 1);
+       usdtAmt =  ICurveExchange(CURVE_POOL).exchange_underlying(CURVE_DAI_INDEX, CURVE_USDT_INDEX, usdtAmt, 1);
+
+         // deposit remaining dai to CURVE Pool, getting back am3CRV token
+        ICurveExchange(CURVE_POOL).add_liquidity([curveDaiAmt, 0,0 ], 1, true);
 
         // deposit to AAVE Lending Pool and get back amDAI, amUSDC, amUSDT tokens
-        ILendingPool(LENDING_POOL).deposit(want, daiAmount, address(this), 0);
-        ILendingPool(LENDING_POOL).deposit(usdc, usdcAmount, address(this), 0);
-        ILendingPool(LENDING_POOL).deposit(usdt, usdtAmount, address(this), 0);
+        ILendingPool(LENDING_POOL).deposit(want, daiAmt, address(this), 0);
+        ILendingPool(LENDING_POOL).deposit(usdc, usdcAmt, address(this), 0);
+        ILendingPool(LENDING_POOL).deposit(usdt, usdtAmt, address(this), 0);
+      
+    }
 
-        // deposit the amDai, amUSDC, amUSDT into the CURVE AAVE pool
-        // gives back am3CRV LP TOKENS  
-        ICurveExchange(CURVE_POOL).add_liquidity([
-        balanceOfToken(amDAI),
-        balanceOfToken(amUSDC),
-        balanceOfToken(amUSDT)
-        ], 1);
+     function testDeposit(uint256 _amount) external {
+        // get respective amount of tokens for each pool according to their allocation percentage
+        uint256 usdcAmt = _amount.mul(usdcPoolPercent).div(ALLOC_DECIMALS);
+        uint256 usdtAmt = _amount.mul(usdtPoolPercent).div(ALLOC_DECIMALS);
+        uint256 daiAmt = _amount.mul(daiPoolPercent).div(ALLOC_DECIMALS);
+
+        uint256 curveDaiAmt = _amount.sub(usdcAmt.add(usdtAmt).add(daiAmt));
+
+        // dai to usdc
+       usdcAmt =  ICurveExchange(CURVE_POOL).exchange_underlying(CURVE_DAI_INDEX, CURVE_USDC_INDEX, usdcAmt, 1);
+        // dai to usdt
+       usdtAmt =  ICurveExchange(CURVE_POOL).exchange_underlying(CURVE_DAI_INDEX, CURVE_USDT_INDEX, usdtAmt, 1);
+
+         // deposit remaining dai to CURVE Pool, getting back am3CRV token
+        ICurveExchange(CURVE_POOL).add_liquidity([curveDaiAmt, 0,0 ], 1, true);
+
+        // deposit to AAVE Lending Pool and get back amDAI, amUSDC, amUSDT tokens
+        ILendingPool(LENDING_POOL).deposit(want, daiAmt, address(this), 0);
+        ILendingPool(LENDING_POOL).deposit(usdc, usdcAmt, address(this), 0);
+        ILendingPool(LENDING_POOL).deposit(usdt, usdtAmt, address(this), 0);
+    }
+
+    function checkAAVERewardsBalance() external view returns (uint256) {
+        address[] memory assets = new address[](3);
+        assets[0] = amDAI;
+        assets[1] = amUSDC;
+        assets[2] = amUSDT;
+        return IAaveIncentivesController(INCENTIVES_CONTROLLER).getRewardsBalance(assets, address(this));
     }
 
     /// @dev utility function to withdraw everything for migration
+    /// @dev liquidate from am3CRV to want directly in the CURVE pool
     function _withdrawAll() internal override {
         ILendingPool(LENDING_POOL).withdraw(want, balanceOfPool(), address(this));
     }
-    /// @dev withdraw the specified amount of want, liquidate from amDAI to want, paying off any necessary debt for the conversion
+    /// @dev withdraw the specified amount of want, liquidate from am3CRV to want, paying off any necessary debt for the conversion
     function _withdrawSome(uint256 _amount) internal override returns (uint256) {
         if (_amount > balanceOfPool()) {
             _amount = balanceOfPool();
@@ -184,6 +210,9 @@ contract MyStrategy is BaseStrategy {
     }
 
     /// @dev Harvest from strategy mechanics, realizing increase in underlying position
+    /// @notice getting MATIC rewards from 2 places
+    /// @notice one from the AAVE LENDING POOLS for lending DAI, USDC, USDT
+    /// @notice 2nd from the CURVE POOL for lending the amDAI, amUSDC, amUSDT
     function harvest() external whenNotPaused returns (uint256 harvested) {
         _onlyAuthorizedActors();
 
