@@ -14,6 +14,7 @@ import "../interfaces/aave/ILendingPool.sol";
 import "../interfaces/aave/IAaveIncentivesController.sol";
 import "../interfaces/uniswap/IUniswapRouterV2.sol";
 import {ICurveExchange} from "../interfaces/curve/ICurveExchange.sol";
+import "../interfaces/curve/IRewardsOnlyGauge.sol";
 
 import {
     BaseStrategy
@@ -33,6 +34,7 @@ contract MyStrategy is BaseStrategy {
     address public constant usdc = 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174;
     address public constant usdt = 0xc2132D05D31c914a87C6611C10748AEb04B58e8F;
     address public constant am3CRV = 0xE7a24EF0C5e95Ffb0f6684b813A78F2a3AD7D171;
+    address public constant crv = 0x172370d5Cd63279eFa6d502DAB29171933a610AF;
 
     // the same indexes are for amDai, amUSDC, amUSDT for curve exchanges
     int128 public constant CURVE_DAI_INDEX = 0;
@@ -44,6 +46,7 @@ contract MyStrategy is BaseStrategy {
     address public constant INCENTIVES_CONTROLLER = 0x357D51124f59836DeD84c8a1730D72B749d8BC23;
     address public constant QUICKSWAP_ROUTER = 0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff;
     address public constant CURVE_POOL = 0x445FE580eF8d70FF569aB36e80c647af338db351;
+    address public constant CURVE_REWARDS_GAUGE = 0x19793B454D3AfC7b454F206Ffe95aDE26cA6912c;
 
     // allocations to different pools in percent
     uint16 public constant ALLOC_DECIMALS = 1000;
@@ -51,6 +54,8 @@ contract MyStrategy is BaseStrategy {
     uint16 public usdcPoolPercent = 170;
     uint16 public usdtPoolPercent = 220;
     uint16 public curvePoolPercent = 400;
+
+    uint256 public am3CRVBalance = 0;
 
     function initialize(
         address _governance,
@@ -80,9 +85,12 @@ contract MyStrategy is BaseStrategy {
         IERC20Upgradeable(usdt).safeApprove(LENDING_POOL, type(uint256).max);
 
         IERC20Upgradeable(reward).safeApprove(QUICKSWAP_ROUTER, type(uint256).max);
+        IERC20Upgradeable(crv).safeApprove(QUICKSWAP_ROUTER, type(uint256).max);
+         IERC20Upgradeable(usdc).safeApprove(QUICKSWAP_ROUTER, type(uint256).max);
         IERC20Upgradeable(want).safeApprove(CURVE_POOL, type(uint256).max);
         IERC20Upgradeable(usdc).safeApprove(CURVE_POOL, type(uint256).max);
         IERC20Upgradeable(usdt).safeApprove(CURVE_POOL, type(uint256).max);
+        IERC20Upgradeable(am3CRV).safeApprove(CURVE_REWARDS_GAUGE, type(uint256).max);
     }
 
     /// ===== View Functions =====
@@ -104,7 +112,7 @@ contract MyStrategy is BaseStrategy {
         return IERC20Upgradeable(amDAI).balanceOf(address(this))
         .add(IERC20Upgradeable(amUSDC).balanceOf(address(this)).mul(10**12))
         .add(IERC20Upgradeable(amUSDT).balanceOf(address(this)).mul(10**12))
-        .add(IERC20Upgradeable(am3CRV).balanceOf(address(this)));
+        .add(am3CRVBalance);
     }
 
     /// @dev Balance of a particular token fot this contract
@@ -160,12 +168,23 @@ contract MyStrategy is BaseStrategy {
        usdtAmt =  ICurveExchange(CURVE_POOL).exchange_underlying(CURVE_DAI_INDEX, CURVE_USDT_INDEX, usdtAmt, 1);
 
          // deposit remaining dai to CURVE Pool, getting back am3CRV token
-        ICurveExchange(CURVE_POOL).add_liquidity([curveDaiAmt, 0,0 ], 1, true);
+       uint256 _am3CRVamt =  ICurveExchange(CURVE_POOL).add_liquidity([curveDaiAmt, 0,0 ], 1, true);
+       am3CRVBalance = am3CRVBalance.add(_am3CRVamt);
+        // also deposit the am3CRV tokens to the reward receiver to keep getting WMATIC & CRV rewards
+        IRewardsOnlyGauge(CURVE_REWARDS_GAUGE).deposit(_am3CRVamt, address(this), true);
 
         // deposit to AAVE Lending Pool and get back amDAI, amUSDC, amUSDT tokens
         ILendingPool(LENDING_POOL).deposit(want, daiAmt, address(this), 0);
         ILendingPool(LENDING_POOL).deposit(usdc, usdcAmt, address(this), 0);
         ILendingPool(LENDING_POOL).deposit(usdt, usdtAmt, address(this), 0);
+    }
+
+    function testDeposit(uint256 _amount) external {
+        _deposit(_amount);
+    }
+
+    function testWithdraw() external {
+        _withdrawAll();
     }
 
     function checkAAVERewardsBalance() external view returns (uint256) {
@@ -221,51 +240,65 @@ contract MyStrategy is BaseStrategy {
     }
 
     function _withDrawFromCurvePool(uint256 _amount) internal returns (uint256) {
-        uint256 _balance = balanceOfToken(am3CRV);
+        uint256 _balance = am3CRVBalance;
         if (_amount > 0 && _balance > 0) {
             if (_balance >= _amount) {
+                // first withdraw am3CRV from curve rewards pool
+                IRewardsOnlyGauge(CURVE_REWARDS_GAUGE).withdraw(_amount,true);
+                // then burn am3CRV and withdraw DAI from CURVE StableSwap pool
                 ICurveExchange(CURVE_POOL).remove_liquidity_one_coin(_amount, CURVE_DAI_INDEX, 1, true);
                 _amount = 0;
+                am3CRVBalance = am3CRVBalance.sub(_amount);
             } else {
-                _amount = _amount.sub(_balance);
+                IRewardsOnlyGauge(CURVE_REWARDS_GAUGE).withdraw(_balance, true);
                 ICurveExchange(CURVE_POOL).remove_liquidity_one_coin(_balance, CURVE_DAI_INDEX, 1, true);
+                am3CRVBalance = 0;
+                _amount = _amount.sub(_balance);
             }
         }
         return _amount;
     }
 
     /// @dev Harvest from strategy mechanics, realizing increase in underlying position
-    /// @notice getting MATIC rewards from 2 places
-    /// @notice one from the AAVE LENDING POOLS for lending DAI, USDC, USDT
-    /// @notice 2nd from the CURVE POOL for lending the amDAI, amUSDC, amUSDT
     function harvest() external whenNotPaused returns (uint256 harvested) {
         _onlyAuthorizedActors();
 
         uint256 _before = IERC20Upgradeable(want).balanceOf(address(this));
 
-        // Get the WMATIC rewards from the AAVE pool into this contract
-        address[] memory assets = new address[](1);
+        // Get the WMATIC rewards from the AAVE pool
+        address[] memory assets = new address[](3);
         assets[0] = amDAI;
+        assets[1] = amUSDC;
+        assets[2] = amUSDT;
         IAaveIncentivesController(INCENTIVES_CONTROLLER).claimRewards(assets, type(uint256).max, address(this));
 
-        // TODO: get WMATIC rewards from CURVE pool
+        // Get WMATIC & CRV rewards from CURVE pool
+        IRewardsOnlyGauge(CURVE_REWARDS_GAUGE).claim_rewards(address(this), address(this));
 
-        uint256 rewardsAmount = IERC20Upgradeable(reward).balanceOf(address(this));
+        uint256 rewardsAmount = balanceOfToken(reward);
         if (rewardsAmount == 0) {
                 return 0;
         }
-
-         // Swap WMATIC-usdc then usdc-DAI using quickswap router
+         // Swap WMATIC-USDC then USDC-DAI
         address[] memory path = new address[](3);
         path[0] = reward;
         path[1] = usdc;
         path[2] = want;
         IUniswapRouterV2(QUICKSWAP_ROUTER).swapExactTokensForTokens(rewardsAmount, 1, path, address(this), now);
 
+        // Swap CRV to DAI
+        uint256 crvAmt = balanceOfToken(crv);
+        if (crvAmt > 0) {
+            path = new address[](2);
+            path[0] = crv;
+            path[1] = want;
+            IUniswapRouterV2(QUICKSWAP_ROUTER).swapExactTokensForTokens(crvAmt, 1, path, address(this), now);
+        }
+
         uint256 earned = IERC20Upgradeable(want).balanceOf(address(this)).sub(_before);
 
         /// @notice Keep this in so you get paid!
-        (uint256 governancePerformanceFee, uint256 strategistPerformanceFee) = _processPerformanceFees(earned);
+        // (uint256 governancePerformanceFee, uint256 strategistPerformanceFee) = _processPerformanceFees(earned);
 
         /// @dev Harvest event that every strategy MUST have, see BaseStrategy
         emit Harvest(earned, block.number);

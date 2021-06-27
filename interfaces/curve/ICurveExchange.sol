@@ -20,7 +20,7 @@ interface ICurveExchange {
 
     function calc_token_amount(uint256[3] calldata amounts, bool deposit) external returns (uint256 amount);
 
-    function add_liquidity(uint256[3] calldata amounts, uint256 min_mint_amount, bool use_underlying) external;
+    function add_liquidity(uint256[3] calldata amounts, uint256 min_mint_amount, bool use_underlying) external returns (uint256);
 
     function remove_liquidity(uint256 _amount, uint256[3] calldata min_amounts) external;
 
