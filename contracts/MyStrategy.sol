@@ -168,28 +168,6 @@ contract MyStrategy is BaseStrategy {
         ILendingPool(LENDING_POOL).deposit(usdt, usdtAmt, address(this), 0);
     }
 
-       function testDeposit(uint256 _amount) external {
-        // get respective amount of tokens for each pool according to their allocation percentage
-        uint256 usdcAmt = _amount.mul(usdcPoolPercent).div(ALLOC_DECIMALS);
-        uint256 usdtAmt = _amount.mul(usdtPoolPercent).div(ALLOC_DECIMALS);
-        uint256 daiAmt = _amount.mul(daiPoolPercent).div(ALLOC_DECIMALS);
-
-        uint256 curveDaiAmt = _amount.sub(usdcAmt.add(usdtAmt).add(daiAmt));
-
-        // dai to usdc
-       usdcAmt =  ICurveExchange(CURVE_POOL).exchange_underlying(CURVE_DAI_INDEX, CURVE_USDC_INDEX, usdcAmt, 1);
-        // dai to usdt
-       usdtAmt =  ICurveExchange(CURVE_POOL).exchange_underlying(CURVE_DAI_INDEX, CURVE_USDT_INDEX, usdtAmt, 1);
-
-         // deposit remaining dai to CURVE Pool, getting back am3CRV token
-        ICurveExchange(CURVE_POOL).add_liquidity([curveDaiAmt, 0,0 ], 1, true);
-
-        // deposit to AAVE Lending Pool and get back amDAI, amUSDC, amUSDT tokens
-        ILendingPool(LENDING_POOL).deposit(want, daiAmt, address(this), 0);
-        ILendingPool(LENDING_POOL).deposit(usdc, usdcAmt, address(this), 0);
-        ILendingPool(LENDING_POOL).deposit(usdt, usdtAmt, address(this), 0);
-    }
-
     function checkAAVERewardsBalance() external view returns (uint256) {
         address[] memory assets = new address[](3);
         assets[0] = amDAI;
@@ -203,14 +181,11 @@ contract MyStrategy is BaseStrategy {
         _withdrawSome(balanceOfPool());
     }
 
-    function testWithdrawAll() external {
-        _withdrawSome(balanceOfPool());
-    }
-
     /// @dev withdraw the specified amount of want, paying off any necessary debt for the conversion
     function _withdrawSome(uint256 _amount) internal override returns (uint256) {
-        if (_amount > balanceOfPool()) {
-            _amount = balanceOfPool();
+        uint256 _pool = balanceOfPool();
+        if (_amount > _pool) {
+            _amount = _pool;
         }
 
         uint256 _sub = _amount;
@@ -226,9 +201,9 @@ contract MyStrategy is BaseStrategy {
 
     /// @param _d => number to make up for the difference in decimals between dai & usdc/usdt
     function _withDrawFromAAVEPool(address _aToken, address _token, uint256 _d, uint256 _amount, int128 _exIndex) internal returns (uint256) {
-        if (_amount > 0) {
+        uint256 _balance = balanceOfToken(_aToken).mul(_d);
+        if (_amount > 0 && _balance > 0) {
             uint256 _exAmt;
-            uint256 _balance = balanceOfToken(_aToken).mul(_d);
             if (_balance >= _amount) {
                _exAmt =  ILendingPool(LENDING_POOL).withdraw(_token, _amount.div(_d), address(this));
                 _amount = 0;
@@ -246,8 +221,8 @@ contract MyStrategy is BaseStrategy {
     }
 
     function _withDrawFromCurvePool(uint256 _amount) internal returns (uint256) {
-        if (_amount > 0) {
-            uint256 _balance = balanceOfToken(am3CRV);
+        uint256 _balance = balanceOfToken(am3CRV);
+        if (_amount > 0 && _balance > 0) {
             if (_balance >= _amount) {
                 ICurveExchange(CURVE_POOL).remove_liquidity_one_coin(_amount, CURVE_DAI_INDEX, 1, true);
                 _amount = 0;
