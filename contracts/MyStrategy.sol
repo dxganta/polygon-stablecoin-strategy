@@ -81,7 +81,8 @@ contract MyStrategy is BaseStrategy {
 
         IERC20Upgradeable(reward).safeApprove(QUICKSWAP_ROUTER, type(uint256).max);
         IERC20Upgradeable(want).safeApprove(CURVE_POOL, type(uint256).max);
-
+        IERC20Upgradeable(usdc).safeApprove(CURVE_POOL, type(uint256).max);
+        IERC20Upgradeable(usdt).safeApprove(CURVE_POOL, type(uint256).max);
     }
 
     /// ===== View Functions =====
@@ -97,10 +98,13 @@ contract MyStrategy is BaseStrategy {
     }
 
     /// @dev Balance of want currently held in strategy positions
+    /// @notice since usdc & usdt has 6 decimals, multiply their balance with 10^12
+    /// to get an accurate representation of balanceOfPool in DAI terms
     function balanceOfPool() public override view returns (uint256) {
         return IERC20Upgradeable(amDAI).balanceOf(address(this))
-        .add(IERC20Upgradeable(amUSDC).balanceOf(address(this)))
-        .add(IERC20Upgradeable(amUSDT).balanceOf(address(this)));
+        .add(IERC20Upgradeable(amUSDC).balanceOf(address(this)).mul(10**12))
+        .add(IERC20Upgradeable(amUSDT).balanceOf(address(this)).mul(10**12))
+        .add(IERC20Upgradeable(am3CRV).balanceOf(address(this)));
     }
 
     /// @dev Balance of a particular token fot this contract
@@ -162,10 +166,9 @@ contract MyStrategy is BaseStrategy {
         ILendingPool(LENDING_POOL).deposit(want, daiAmt, address(this), 0);
         ILendingPool(LENDING_POOL).deposit(usdc, usdcAmt, address(this), 0);
         ILendingPool(LENDING_POOL).deposit(usdt, usdtAmt, address(this), 0);
-      
     }
 
-     function testDeposit(uint256 _amount) external {
+       function testDeposit(uint256 _amount) external {
         // get respective amount of tokens for each pool according to their allocation percentage
         uint256 usdcAmt = _amount.mul(usdcPoolPercent).div(ALLOC_DECIMALS);
         uint256 usdtAmt = _amount.mul(usdtPoolPercent).div(ALLOC_DECIMALS);
@@ -196,16 +199,63 @@ contract MyStrategy is BaseStrategy {
     }
 
     /// @dev utility function to withdraw everything for migration
-    /// @dev liquidate from am3CRV to want directly in the CURVE pool
     function _withdrawAll() internal override {
-        ILendingPool(LENDING_POOL).withdraw(want, balanceOfPool(), address(this));
+        _withdrawSome(balanceOfPool());
     }
-    /// @dev withdraw the specified amount of want, liquidate from am3CRV to want, paying off any necessary debt for the conversion
+
+    function testWithdrawAll() external {
+        _withdrawSome(balanceOfPool());
+    }
+
+    /// @dev withdraw the specified amount of want, paying off any necessary debt for the conversion
     function _withdrawSome(uint256 _amount) internal override returns (uint256) {
         if (_amount > balanceOfPool()) {
             _amount = balanceOfPool();
         }
-        ILendingPool(LENDING_POOL).withdraw(want, _amount, address(this));
+
+        uint256 _sub = _amount;
+
+       _sub =  _withDrawFromAAVEPool(amDAI, want, 1, _sub, 0);
+       _sub = _withDrawFromCurvePool(_sub);
+       _sub =  _withDrawFromAAVEPool(amUSDC, usdc, 10**12, _sub, CURVE_USDC_INDEX);
+       _sub = _withDrawFromAAVEPool(amUSDT, usdt, 10**12, _sub, CURVE_USDT_INDEX );
+
+        return _amount;
+    }
+
+
+    /// @param _d => number to make up for the difference in decimals between dai & usdc/usdt
+    function _withDrawFromAAVEPool(address _aToken, address _token, uint256 _d, uint256 _amount, int128 _exIndex) internal returns (uint256) {
+        if (_amount > 0) {
+            uint256 _exAmt;
+            uint256 _balance = balanceOfToken(_aToken).mul(_d);
+            if (_balance >= _amount) {
+               _exAmt =  ILendingPool(LENDING_POOL).withdraw(_token, _amount.div(_d), address(this));
+                _amount = 0;
+            } else {
+                _amount = _amount.sub(_balance);
+               _exAmt =  ILendingPool(LENDING_POOL).withdraw(_token, _balance.div(_d), address(this));
+            }
+
+            // exchange to want/DAI
+            if (_exIndex != 0) {
+                ICurveExchange(CURVE_POOL).exchange_underlying(_exIndex,CURVE_DAI_INDEX, _exAmt, 1);
+            }
+        }
+        return _amount;
+    }
+
+    function _withDrawFromCurvePool(uint256 _amount) internal returns (uint256) {
+        if (_amount > 0) {
+            uint256 _balance = balanceOfToken(am3CRV);
+            if (_balance >= _amount) {
+                ICurveExchange(CURVE_POOL).remove_liquidity_one_coin(_amount, CURVE_DAI_INDEX, 1, true);
+                _amount = 0;
+            } else {
+                _amount = _amount.sub(_balance);
+                ICurveExchange(CURVE_POOL).remove_liquidity_one_coin(_balance, CURVE_DAI_INDEX, 1, true);
+            }
+        }
         return _amount;
     }
 

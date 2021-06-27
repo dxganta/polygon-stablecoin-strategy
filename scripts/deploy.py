@@ -9,7 +9,7 @@ from config import (
     PROTECTED_TOKENS,
     FEES
 )
-from dotmap import DotMap
+from helpers.dotmap import DotMap
 
 
 def main():
