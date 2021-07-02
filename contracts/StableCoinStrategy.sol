@@ -20,7 +20,7 @@ import {
     BaseStrategy
 } from "../deps/BaseStrategy.sol";
 
-contract MyStrategy is BaseStrategy {
+contract StableCoinStrategy is BaseStrategy {
     using SafeERC20Upgradeable for IERC20Upgradeable;
     using AddressUpgradeable for address;
     using SafeMathUpgradeable for uint256;
@@ -94,7 +94,7 @@ contract MyStrategy is BaseStrategy {
 
     // @dev Specify the name of the strategy
     function getName() external override pure returns (string memory) {
-        return "AAVE-Polygon-CURVE";
+        return "AAVE-Polygon-CURVE StableCoin Strategy";
     }
 
     // @dev Specify the version of the Strategy, for upgrades
@@ -117,10 +117,6 @@ contract MyStrategy is BaseStrategy {
         return IERC20Upgradeable(_token).balanceOf(address(this));
     }
     
-    /// @dev Returns true if this strategy requires tending
-    function isTendable() public override view returns (bool) {
-        return true;
-    }
 
     // @dev These are the tokens that cannot be moved except by the vault
     function getProtectedTokens() public override view returns (address[] memory) {

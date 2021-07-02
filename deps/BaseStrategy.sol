@@ -103,10 +103,6 @@ abstract contract BaseStrategy is PausableUpgradeable, SettAccessControl {
         return balanceOfWant().add(balanceOfPool());
     }
 
-    function isTendable() public virtual pure returns (bool) {
-        return false;
-    }
-
     /// ===== Permissioned Actions: Governance =====
 
     function setGuardian(address _guardian) external {

@@ -34,7 +34,7 @@ Taking into account their allocation percentages the net APY of the strategy wil
 ## Documentation
 A general template for the Strategy, Controller, Vault has generated taken from https://github.com/GalloDaSballo/badger-strategy-mix-v1
 
-### The Vault Contract has 3 prime functions
+### The Vault Contract (/contracts/deps/SettV3.sol) has 3 prime functions
 
 <strong>deposit(uint256 _amount)</strong>
 ```
@@ -59,7 +59,7 @@ info: Deposits the DAI held by the Vault Contract to the controller. The Control
 access: Only Authorized Actors
 ```
 
-### The Controller Contract
+### The Controller Contract (/contracts/deps/Controller.sol)
 The prime function of the Controller is to set, approve & remove Strategies for the Vault and act as a middleman between the Vault & the strategy(ies).
 
 ### The Strategy Contract (Most Important Functions)
