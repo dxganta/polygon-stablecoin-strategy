@@ -2,14 +2,11 @@ from brownie import *
 from config import (
     BADGER_DEV_MULTISIG,
     WANT,
-    AM_DAI,
-    AM_USDC,
-    AM_USDT,
     REWARD_TOKEN,
     PROTECTED_TOKENS,
     FEES
 )
-from helpers.dotmap import DotMap
+from dotmap import DotMap
 
 
 def main():
@@ -74,9 +71,6 @@ def deploy():
 
     # Set up tokens
     want = interface.IERC20(WANT)
-    amDAI = interface.IERC20(AM_DAI)
-    amUSDC = interface.IERC20(AM_USDC)
-    amUSDT = interface.IERC20(AM_USDT)
 
     rewardToken = interface.IERC20(REWARD_TOKEN)
 
@@ -93,7 +87,7 @@ def deploy():
         ["0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270", WANT],
         deployer,
         9999999999999999,
-        {"from": deployer, "value": 100000000000000000000}
+        {"from": deployer, "value": 10000 * 10**18}
     )
 
     return DotMap(
@@ -104,6 +98,5 @@ def deploy():
         strategy=strategy,
         # guestList=guestList,
         want=want,
-        lpComponent=[amDAI, amUSDC, amUSDT],
         rewardToken=rewardToken
     )

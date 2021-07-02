@@ -2,7 +2,6 @@ from brownie import *
 from config import (
   BADGER_DEV_MULTISIG,
   WANT,
-  LP_COMPONENT,
   REWARD_TOKEN,
   DEFAULT_GOV_PERFORMANCE_FEE,
   DEFAULT_PERFORMANCE_FEE,
@@ -14,7 +13,7 @@ import pytest
 
 @pytest.fixture
 def tokens():
-  return [WANT, LP_COMPONENT, REWARD_TOKEN]
+  return [WANT, REWARD_TOKEN]
 
 @pytest.fixture
 def deployed():

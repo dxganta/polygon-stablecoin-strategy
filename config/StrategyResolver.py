@@ -10,9 +10,7 @@ class StrategyResolver(StrategyCoreResolver):
             Specifies extra check for ordinary operation on withdrawal
             Use this to verify that balances in the get_strategy_destinations are properly set
         """
-        assert after.balances(
-            "want", "aToken") < before.balances("want", "aToken")
-
+        assert True
     def hook_after_confirm_deposit(self, before, after, params):
         """
             Specifies extra check for ordinary operation on deposit
@@ -25,8 +23,8 @@ class StrategyResolver(StrategyCoreResolver):
             Specifies extra check for ordinary operation on earn
             Use this to verify that balances in the get_strategy_destinations are properly set
         """
-        assert after.balances(
-            "want", "aToken") > before.balances("want", "aToken")
+        assert True
+        # assert after.balances("want", "amDAI") + after.balances("want", "amUSDC") + after.balances("want", "amUSDT") < before.balances("want", "amDAI") + before.balances("want", "amUSDC") + before.balances("want", "amUSDT")
 
     def confirm_harvest(self, before, after, tx):
         """
@@ -78,5 +76,7 @@ class StrategyResolver(StrategyCoreResolver):
         """
         strategy = self.manager.strategy
         return {
-            "aToken": strategy.aToken(),
+            "amDAI": strategy.amDAI(),
+            "amUSDC": strategy.amUSDC(),
+            "amUSDT": strategy.amUSDT()
         }

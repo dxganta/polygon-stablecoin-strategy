@@ -103,7 +103,7 @@ abstract contract BaseStrategy is PausableUpgradeable, SettAccessControl {
         return balanceOfWant().add(balanceOfPool());
     }
 
-    function isTendable() public virtual view returns (bool) {
+    function isTendable() public virtual pure returns (bool) {
         return false;
     }
 
@@ -149,13 +149,12 @@ abstract contract BaseStrategy is PausableUpgradeable, SettAccessControl {
         if (_want > 0) {
             _deposit(_want);
         }
-        _postDeposit();
     }
 
     // ===== Permissioned Actions: Controller =====
 
     /// @notice Controller-only function to Withdraw partial funds, normally used with a vault withdrawal
-    function withdrawAll() external virtual whenNotPaused returns (uint256 balance) {
+    function withdrawAll() external virtual whenNotPaused {
         _onlyController();
 
         _withdrawAll();
@@ -176,7 +175,7 @@ abstract contract BaseStrategy is PausableUpgradeable, SettAccessControl {
         // Sanity check: Ensure we were able to retrieve sufficent want from strategy positions
         // If we end up with less than the amount requested, make sure it does not deviate beyond a maximum threshold
         if (_postWithdraw < _amount) {
-            uint256 diff = _diff(_amount, _postWithdraw);
+            uint256 diff = _amount.sub(_postWithdraw);
 
             // Require that difference between expected and actual values is less than the deviation threshold percentage
             require(diff <= _amount.mul(withdrawalMaxDeviationThreshold).div(MAX_FEE), "base-strategy/withdraw-exceed-max-deviation-threshold");
@@ -260,55 +259,10 @@ abstract contract BaseStrategy is PausableUpgradeable, SettAccessControl {
         require(_vault != address(0), "!vault"); // additional protection so we don't burn the funds
         IERC20Upgradeable(want).safeTransfer(_vault, _amount);
     }
-
-    /// @notice Swap specified balance of given token on Uniswap with given path
-    function _swap(
-        address startToken,
-        uint256 balance,
-        address[] memory path
-    ) internal {
-        _safeApproveHelper(startToken, uniswap, balance);
-        IUniswapRouterV2(uniswap).swapExactTokensForTokens(balance, 0, path, address(this), now);
-    }
-
-    function _swapEthIn(uint256 balance, address[] memory path) internal {
-        IUniswapRouterV2(uniswap).swapExactETHForTokens{value: balance}(0, path, address(this), now);
-    }
-
-    function _swapEthOut(
-        address startToken,
-        uint256 balance,
-        address[] memory path
-    ) internal {
-        _safeApproveHelper(startToken, uniswap, balance);
-        IUniswapRouterV2(uniswap).swapExactTokensForETH(balance, 0, path, address(this), now);
-    }
-
-    /// @notice Add liquidity to uniswap for specified token pair, utilizing the maximum balance possible
-    function _add_max_liquidity_uniswap(address token0, address token1) internal virtual {
-        uint256 _token0Balance = IERC20Upgradeable(token0).balanceOf(address(this));
-        uint256 _token1Balance = IERC20Upgradeable(token1).balanceOf(address(this));
-
-        _safeApproveHelper(token0, uniswap, _token0Balance);
-        _safeApproveHelper(token1, uniswap, _token1Balance);
-
-        IUniswapRouterV2(uniswap).addLiquidity(token0, token1, _token0Balance, _token1Balance, 0, 0, address(this), block.timestamp);
-    }
-
-    /// @notice Utility function to diff two numbers, expects higher value in first position
-    function _diff(uint256 a, uint256 b) internal pure returns (uint256) {
-        require(a >= b, "diff/expected-higher-number-in-first-position");
-        return a.sub(b);
-    }
-
     // ===== Abstract Functions: To be implemented by specific Strategies =====
 
     /// @dev Internal deposit logic to be implemented by Stratgies
     function _deposit(uint256 _amount) internal virtual;
-
-    function _postDeposit() internal virtual {
-        //no-op by default
-    }
 
     /// @notice Specify tokens used in yield process, should not be available to withdraw via withdrawOther()
     function _onlyNotProtectedTokens(address _asset) internal virtual;

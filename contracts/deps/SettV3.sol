@@ -50,8 +50,8 @@ contract SettV3 is ERC20Upgradeable, SettAccessControlDefended, PausableUpgradea
 
     mapping(address => uint256) public blockLock;
 
-    string internal constant _defaultNamePrefix = "Badger Sett ";
-    string internal constant _symbolSymbolPrefix = "b";
+    string internal constant _defaultNamePrefix = "Force Vault ";
+    string internal constant _symbolSymbolPrefix = "x";
 
     address public guardian;
 

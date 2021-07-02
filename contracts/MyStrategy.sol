@@ -26,9 +26,9 @@ contract MyStrategy is BaseStrategy {
     using SafeMathUpgradeable for uint256;
 
     // address public want // Inherited from BaseStrategy, the token the strategy wants, swaps into and tries to grow
-    address public amDAI; // Token we provide liquidity with
-    address public amUSDC;
-    address public amUSDT;
+    address public constant amDAI = 0x27F8D03b3a2196956ED754baDc28D73be8830A6e; // Token we provide liquidity with
+    address public constant amUSDC = 0x1a13F4Ca1d028320A707D99520AbFefca3998b7F;
+    address public constant amUSDT = 0x60D55F02A771d515e077c9C2403a1ef324885CeC;
     address public reward; // Token we farm and swap to want / amDAI
 
     address public constant usdc = 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174;
@@ -50,10 +50,10 @@ contract MyStrategy is BaseStrategy {
 
     // allocations to different pools in percent
     uint16 public constant ALLOC_DECIMALS = 1000;
-    uint16 public daiPoolPercent = 210;
-    uint16 public usdcPoolPercent = 170;
-    uint16 public usdtPoolPercent = 220;
-    uint16 public curvePoolPercent = 400;
+    uint16 public daiPoolPercent = 170;
+    uint16 public usdcPoolPercent = 140;
+    uint16 public usdtPoolPercent = 210;
+    uint16 public curvePoolPercent = 480;
 
     uint256 public am3CRVBalance = 0;
 
@@ -63,17 +63,14 @@ contract MyStrategy is BaseStrategy {
         address _controller,
         address _keeper,
         address _guardian,
-        address[5] memory _wantConfig,
+        address[2] memory _wantConfig,
         uint256[3] memory _feeConfig
     ) public initializer {
         __BaseStrategy_init(_governance, _strategist, _controller, _keeper, _guardian);
 
         /// @dev Add config here
         want = _wantConfig[0];
-        amDAI = _wantConfig[1];
-        amUSDC = _wantConfig[2];
-        amUSDT = _wantConfig[3];
-        reward = _wantConfig[4];
+        reward = _wantConfig[1];
 
         performanceFeeGovernance = _feeConfig[0];
         performanceFeeStrategist = _feeConfig[1];
@@ -86,7 +83,7 @@ contract MyStrategy is BaseStrategy {
 
         IERC20Upgradeable(reward).safeApprove(QUICKSWAP_ROUTER, type(uint256).max);
         IERC20Upgradeable(crv).safeApprove(QUICKSWAP_ROUTER, type(uint256).max);
-         IERC20Upgradeable(usdc).safeApprove(QUICKSWAP_ROUTER, type(uint256).max);
+        IERC20Upgradeable(usdc).safeApprove(QUICKSWAP_ROUTER, type(uint256).max);
         IERC20Upgradeable(want).safeApprove(CURVE_POOL, type(uint256).max);
         IERC20Upgradeable(usdc).safeApprove(CURVE_POOL, type(uint256).max);
         IERC20Upgradeable(usdt).safeApprove(CURVE_POOL, type(uint256).max);
@@ -167,7 +164,7 @@ contract MyStrategy is BaseStrategy {
         // dai to usdt
        usdtAmt =  ICurveExchange(CURVE_POOL).exchange_underlying(CURVE_DAI_INDEX, CURVE_USDT_INDEX, usdtAmt, 1);
 
-         // deposit remaining dai to CURVE Pool, getting back am3CRV token
+        // deposit remaining dai to CURVE Pool, getting back am3CRV token
        uint256 _am3CRVamt =  ICurveExchange(CURVE_POOL).add_liquidity([curveDaiAmt, 0,0 ], 1, true);
        am3CRVBalance = am3CRVBalance.add(_am3CRVamt);
         // also deposit the am3CRV tokens to the reward receiver to keep getting WMATIC & CRV rewards
@@ -177,22 +174,6 @@ contract MyStrategy is BaseStrategy {
         ILendingPool(LENDING_POOL).deposit(want, daiAmt, address(this), 0);
         ILendingPool(LENDING_POOL).deposit(usdc, usdcAmt, address(this), 0);
         ILendingPool(LENDING_POOL).deposit(usdt, usdtAmt, address(this), 0);
-    }
-
-    function testDeposit(uint256 _amount) external {
-        _deposit(_amount);
-    }
-
-    function testWithdraw() external {
-        _withdrawAll();
-    }
-
-    function checkAAVERewardsBalance() external view returns (uint256) {
-        address[] memory assets = new address[](3);
-        assets[0] = amDAI;
-        assets[1] = amUSDC;
-        assets[2] = amUSDT;
-        return IAaveIncentivesController(INCENTIVES_CONTROLLER).getRewardsBalance(assets, address(this));
     }
 
     /// @dev utility function to withdraw everything for migration
@@ -306,11 +287,6 @@ contract MyStrategy is BaseStrategy {
         return earned;
     }
 
-    // Alternative Harvest with Price received from harvester, used to avoid exessive front-running
-    function harvest(uint256 price) external whenNotPaused returns (uint256 harvested) {
-
-    }
-
     /// @dev Rebalance, Compound or Pay off debt here
     function tend() external whenNotPaused {
         _onlyAuthorizedActors();
@@ -318,6 +294,15 @@ contract MyStrategy is BaseStrategy {
         if (balanceOfWant() > 0) {
             _deposit(balanceOfWant());
         }
+    }
+
+    function chanceAllocations(uint16[4] memory _allocations) external {
+        _onlyAuthorizedActors();
+        require (_allocations[0] + _allocations[1] + _allocations[2] + _allocations[3] == 1000);
+        daiPoolPercent = _allocations[0];
+        usdcPoolPercent = _allocations[1];
+        usdtPoolPercent = _allocations[2];
+        curvePoolPercent = _allocations[3];
     }
 
 
