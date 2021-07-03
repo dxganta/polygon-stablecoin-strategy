@@ -29,7 +29,7 @@ contract MyStrategy is BaseStrategy {
     address public constant amDAI = 0x27F8D03b3a2196956ED754baDc28D73be8830A6e; // Token we provide liquidity with
     address public constant amUSDC = 0x1a13F4Ca1d028320A707D99520AbFefca3998b7F;
     address public constant amUSDT = 0x60D55F02A771d515e077c9C2403a1ef324885CeC;
-    address public reward; // Token we farm and swap to want / amDAI
+    address public constant reward = 0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270; // WMATIC
 
     address public constant usdc = 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174;
     address public constant usdt = 0xc2132D05D31c914a87C6611C10748AEb04B58e8F;
@@ -63,18 +63,11 @@ contract MyStrategy is BaseStrategy {
         address _controller,
         address _keeper,
         address _guardian,
-        address[2] memory _wantConfig,
-        uint256[3] memory _feeConfig
+        address _want
     ) public initializer {
         __BaseStrategy_init(_governance, _strategist, _controller, _keeper, _guardian);
 
-        /// @dev Add config here
-        want = _wantConfig[0];
-        reward = _wantConfig[1];
-
-        performanceFeeGovernance = _feeConfig[0];
-        performanceFeeStrategist = _feeConfig[1];
-        withdrawalFee = _feeConfig[2];
+        want = _want;
 
         /// @dev do one off approvals here
         IERC20Upgradeable(want).safeApprove(LENDING_POOL, type(uint256).max);
@@ -300,15 +293,5 @@ contract MyStrategy is BaseStrategy {
         usdcPoolPercent = _allocations[1];
         usdtPoolPercent = _allocations[2];
         curvePoolPercent = _allocations[3];
-    }
-
-
-    /// ===== Internal Helper Functions =====
-    
-    /// @dev used to manage the governance and strategist fee, make sure to use it to get paid!
-    function _processPerformanceFees(uint256 _amount) internal returns (uint256 governancePerformanceFee, uint256 strategistPerformanceFee) {
-        governancePerformanceFee = _processFee(want, _amount, performanceFeeGovernance, IController(controller).rewards());
-
-        strategistPerformanceFee = _processFee(want, _amount, performanceFeeStrategist, strategist);
     }
 }

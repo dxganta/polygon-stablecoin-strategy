@@ -31,6 +31,24 @@ As of July 2, 2021 the yields from the separate pools are as follows (including 
 Taking into account their allocation percentages the net APY of the strategy will be<br>
 ### = (20% * 3.86%) + (16% * 3.22%) + (25% * 4.63%) + (39% * 10.67) = <strong>6.6% APY</strong>
 
+## Usage
+
+### For Users (Callable by anyone)
+A user just has to call the <strong>deposit()</strong> function in the Vault Contract to deposit his DAI. The Vault will provide him the required number of Vault Shares.
+
+To withdraw his funds, the user just has to call the <strong>withdraw()</strong> function with the number of Vault shares he wants to liquidate and the Vault will return his deserved DAI as per the Vault shares.
+
+(Ofcourse the user won't call the functions directly, but through a frontend component which will implement the above 2 functions through 2 buttons namely <strong>DEPOSIT</strong> & <strong>WITHDRAW</strong>)
+
+### For Force Team (Below functions can only be called by authorized accounts)
+The Force Team has to call the <strong>earn()</strong> function in the Vault Contract to deposit the DAI from the Vault Contract into the Strategy to start yield generation.
+
+There is a <strong>harvest()</strong> function in the Strategy Contract which has to be called periodically by the Force Team (generally every month or week) to realize the WMATIC/CRV rewards & convert it to DAI.
+
+After the harvest() you may call the <strong>tend()</strong> function which will deposit any idle DAI held by the strategy contract back into the pools for yield generation.
+
+(Ofcourse all the conversions & deposits are automated inside the strategy, you just have to call the above 3 functions)
+
 ## Documentation
 A general template for the Strategy, Controller, Vault has generated from https://github.com/GalloDaSballo/badger-strategy-mix-v1
 
@@ -81,7 +99,7 @@ access: Only Authorized Actors
 
 <strong>tend()</strong>
 ```
-info: reinvests the DAI held by the strategy back into the pools. Generally to be called after the harves() function.
+info: reinvests the DAI held by the strategy back into the pools. Generally to be called after the harvest() function.
 
 access: Only Authorized Actors
 ```
@@ -170,6 +188,8 @@ Deployment will set up a Vault, Controller and deploy your strategy
 ```
 ## Deployment
 
+You can have a look at the deployment script at (/scripts/deploy.py)
+
 When you are finished testing and ready to deploy to the mainnet:
 
 1. [Import a keystore](https://eth-brownie.readthedocs.io/en/stable/account-management.html#importing-from-a-private-key) into Brownie for the account you wish to deploy from.
@@ -182,4 +202,6 @@ $ brownie run deployment --network mainnet
 You will be prompted to enter your keystore password, and then the contract will be deployed.
 
 ## Notes
-The Reward Gauge of the Curve Pool seems to be not giving any CRV/WMATIC rewards in the simulation on the forked polygon mainnet. This is because the [reward_gauge](https://github.com/curvefi/curve-dao-contracts/blob/master/contracts/gauges/RewardsOnlyGauge.vy) contract of the curve pool has a manual component, where a particular authorized address called reward_receiver has to withdraw the rewards from a [rewards_claimer](https://github.com/curvefi/curve-dao-contracts/blob/master/contracts/streamers/RewardClaimer.vy) contract to the rewards_gauge periodically. But this should not be a problem on the real deployment of the contract to the real Polygon Mainnet.
+1. The Reward Gauge of the Curve Pool seems to be not giving any CRV/WMATIC rewards in the simulation on the forked polygon mainnet. This is because the [reward_gauge](https://github.com/curvefi/curve-dao-contracts/blob/master/contracts/gauges/RewardsOnlyGauge.vy) contract of the curve pool has a manual component, where a particular authorized address called reward_receiver has to withdraw the rewards from a [rewards_claimer](https://github.com/curvefi/curve-dao-contracts/blob/master/contracts/streamers/RewardClaimer.vy) contract to the rewards_gauge periodically. But this should not be a problem on the real deployment of the contract to the real Polygon Mainnet.
+
+2. We are calling a Vault, Sett here.

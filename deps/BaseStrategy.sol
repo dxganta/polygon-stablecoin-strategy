@@ -44,14 +44,10 @@ abstract contract BaseStrategy is PausableUpgradeable, SettAccessControl {
     event Harvest(uint256 harvested, uint256 indexed blockNumber);
     event Tend(uint256 tended);
 
-    address public want; // Want: Quickswap WBTC/USDC  LP token
-
-    uint256 public performanceFeeGovernance;
-    uint256 public performanceFeeStrategist;
-    uint256 public withdrawalFee;
+    // DAI
+    address public want; 
 
     uint256 public constant MAX_FEE = 10000;
-    address public constant uniswap = 0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D; // Uniswap Dex
 
     address public controller;
     address public guardian;
@@ -88,11 +84,6 @@ abstract contract BaseStrategy is PausableUpgradeable, SettAccessControl {
         require(msg.sender == guardian || msg.sender == governance, "onlyPausers");
     }
 
-    /// ===== View Functions =====
-    function baseStrategyVersion() public view returns (string memory) {
-        return "1.2";
-    }
-
     /// @notice Get the balance of want held idle in the Strategy
     function balanceOfWant() public view returns (uint256) {
         return IERC20Upgradeable(want).balanceOf(address(this));
@@ -103,33 +94,11 @@ abstract contract BaseStrategy is PausableUpgradeable, SettAccessControl {
         return balanceOfWant().add(balanceOfPool());
     }
 
-    function isTendable() public virtual view returns (bool) {
-        return false;
-    }
-
     /// ===== Permissioned Actions: Governance =====
 
     function setGuardian(address _guardian) external {
         _onlyGovernance();
         guardian = _guardian;
-    }
-
-    function setWithdrawalFee(uint256 _withdrawalFee) external {
-        _onlyGovernance();
-        require(_withdrawalFee <= MAX_FEE, "base-strategy/excessive-withdrawal-fee");
-        withdrawalFee = _withdrawalFee;
-    }
-
-    function setPerformanceFeeStrategist(uint256 _performanceFeeStrategist) external {
-        _onlyGovernance();
-        require(_performanceFeeStrategist <= MAX_FEE, "base-strategy/excessive-strategist-performance-fee");
-        performanceFeeStrategist = _performanceFeeStrategist;
-    }
-
-    function setPerformanceFeeGovernance(uint256 _performanceFeeGovernance) external {
-        _onlyGovernance();
-        require(_performanceFeeGovernance <= MAX_FEE, "base-strategy/excessive-governance-performance-fee");
-        performanceFeeGovernance = _performanceFeeGovernance;
     }
 
     function setController(address _controller) external {
@@ -149,7 +118,6 @@ abstract contract BaseStrategy is PausableUpgradeable, SettAccessControl {
         if (_want > 0) {
             _deposit(_want);
         }
-        _postDeposit();
     }
 
     // ===== Permissioned Actions: Controller =====
@@ -176,20 +144,11 @@ abstract contract BaseStrategy is PausableUpgradeable, SettAccessControl {
         // Sanity check: Ensure we were able to retrieve sufficent want from strategy positions
         // If we end up with less than the amount requested, make sure it does not deviate beyond a maximum threshold
         if (_postWithdraw < _amount) {
-            uint256 diff = _diff(_amount, _postWithdraw);
+            uint256 diff = _amount.sub(_postWithdraw);
 
             // Require that difference between expected and actual values is less than the deviation threshold percentage
             require(diff <= _amount.mul(withdrawalMaxDeviationThreshold).div(MAX_FEE), "base-strategy/withdraw-exceed-max-deviation-threshold");
         }
-
-        // Return the amount actually withdrawn if less than amount requested
-        uint256 _toWithdraw = MathUpgradeable.min(_postWithdraw, _amount);
-
-        // Process withdrawal fee
-        uint256 _fee = _processWithdrawalFee(_toWithdraw);
-
-        // Transfer remaining to Vault to handle withdrawal
-        _transferToVault(_toWithdraw.sub(_fee));
     }
 
     // NOTE: must exclude any tokens used in the yield
@@ -216,35 +175,6 @@ abstract contract BaseStrategy is PausableUpgradeable, SettAccessControl {
 
     /// ===== Internal Helper Functions =====
 
-    /// @notice If withdrawal fee is active, take the appropriate amount from the given value and transfer to rewards recipient
-    /// @return The withdrawal fee that was taken
-    function _processWithdrawalFee(uint256 _amount) internal returns (uint256) {
-        if (withdrawalFee == 0) {
-            return 0;
-        }
-
-        uint256 fee = _amount.mul(withdrawalFee).div(MAX_FEE);
-        IERC20Upgradeable(want).safeTransfer(IController(controller).rewards(), fee);
-        return fee;
-    }
-
-    /// @dev Helper function to process an arbitrary fee
-    /// @dev If the fee is active, transfers a given portion in basis points of the specified value to the recipient
-    /// @return The fee that was taken
-    function _processFee(
-        address token,
-        uint256 amount,
-        uint256 feeBps,
-        address recipient
-    ) internal returns (uint256) {
-        if (feeBps == 0) {
-            return 0;
-        }
-        uint256 fee = amount.mul(feeBps).div(MAX_FEE);
-        IERC20Upgradeable(token).safeTransfer(recipient, fee);
-        return fee;
-    }
-
     /// @dev Reset approval and approve exact amount
     function _safeApproveHelper(
         address token,
@@ -261,54 +191,10 @@ abstract contract BaseStrategy is PausableUpgradeable, SettAccessControl {
         IERC20Upgradeable(want).safeTransfer(_vault, _amount);
     }
 
-    /// @notice Swap specified balance of given token on Uniswap with given path
-    function _swap(
-        address startToken,
-        uint256 balance,
-        address[] memory path
-    ) internal {
-        _safeApproveHelper(startToken, uniswap, balance);
-        IUniswapRouterV2(uniswap).swapExactTokensForTokens(balance, 0, path, address(this), now);
-    }
-
-    function _swapEthIn(uint256 balance, address[] memory path) internal {
-        IUniswapRouterV2(uniswap).swapExactETHForTokens{value: balance}(0, path, address(this), now);
-    }
-
-    function _swapEthOut(
-        address startToken,
-        uint256 balance,
-        address[] memory path
-    ) internal {
-        _safeApproveHelper(startToken, uniswap, balance);
-        IUniswapRouterV2(uniswap).swapExactTokensForETH(balance, 0, path, address(this), now);
-    }
-
-    /// @notice Add liquidity to uniswap for specified token pair, utilizing the maximum balance possible
-    function _add_max_liquidity_uniswap(address token0, address token1) internal virtual {
-        uint256 _token0Balance = IERC20Upgradeable(token0).balanceOf(address(this));
-        uint256 _token1Balance = IERC20Upgradeable(token1).balanceOf(address(this));
-
-        _safeApproveHelper(token0, uniswap, _token0Balance);
-        _safeApproveHelper(token1, uniswap, _token1Balance);
-
-        IUniswapRouterV2(uniswap).addLiquidity(token0, token1, _token0Balance, _token1Balance, 0, 0, address(this), block.timestamp);
-    }
-
-    /// @notice Utility function to diff two numbers, expects higher value in first position
-    function _diff(uint256 a, uint256 b) internal pure returns (uint256) {
-        require(a >= b, "diff/expected-higher-number-in-first-position");
-        return a.sub(b);
-    }
-
-    // ===== Abstract Functions: To be implemented by specific Strategies =====
+   // ===== Abstract Functions: To be implemented by specific Strategies =====
 
     /// @dev Internal deposit logic to be implemented by Stratgies
     function _deposit(uint256 _amount) internal virtual;
-
-    function _postDeposit() internal virtual {
-        //no-op by default
-    }
 
     /// @notice Specify tokens used in yield process, should not be available to withdraw via withdrawOther()
     function _onlyNotProtectedTokens(address _asset) internal virtual;

@@ -2,9 +2,7 @@ from brownie import *
 from config import (
     BADGER_DEV_MULTISIG,
     WANT,
-    REWARD_TOKEN,
-    PROTECTED_TOKENS,
-    FEES
+    REWARD_TOKEN
 )
 from dotmap import DotMap
 
@@ -63,8 +61,7 @@ def deploy():
         controller,
         keeper,
         guardian,
-        PROTECTED_TOKENS,
-        FEES
+        WANT
     )
 
     # Tool that verifies bytecode (run independetly) <- Webapp for anyone to verify
@@ -74,8 +71,7 @@ def deploy():
 
     rewardToken = interface.IERC20(REWARD_TOKEN)
 
-    #  Wire up Controller to Strart
-    #  In testing will pass, but on live it will fail
+    #  Wire up Controller to Strategy
     controller.approveStrategy(WANT, strategy, {"from": governance})
     controller.setStrategy(WANT, strategy, {"from": deployer})
 
