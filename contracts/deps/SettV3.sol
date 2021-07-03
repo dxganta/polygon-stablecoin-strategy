@@ -93,7 +93,7 @@ contract SettV3 is ERC20Upgradeable, SettAccessControlDefended, PausableUpgradea
         controller = _controller;
         guardian = _guardian;
 
-        min = 9500;
+        min = 10000;
 
         emit FullPricePerShareUpdated(getPricePerFullShare(), now, block.number);
 

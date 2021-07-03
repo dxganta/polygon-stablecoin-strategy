@@ -20,7 +20,7 @@ import {
     BaseStrategy
 } from "../deps/BaseStrategy.sol";
 
-contract StableCoinStrategy is BaseStrategy {
+contract MyStrategy is BaseStrategy {
     using SafeERC20Upgradeable for IERC20Upgradeable;
     using AddressUpgradeable for address;
     using SafeMathUpgradeable for uint256;
@@ -50,10 +50,10 @@ contract StableCoinStrategy is BaseStrategy {
 
     // allocations to different pools in percent
     uint16 public constant ALLOC_DECIMALS = 1000;
-    uint16 public daiPoolPercent = 170;
-    uint16 public usdcPoolPercent = 140;
-    uint16 public usdtPoolPercent = 210;
-    uint16 public curvePoolPercent = 480;
+    uint16 public daiPoolPercent = 200;
+    uint16 public usdcPoolPercent = 160;
+    uint16 public usdtPoolPercent = 250;
+    uint16 public curvePoolPercent = 390;
 
     uint256 public am3CRVBalance = 0;
 
@@ -155,7 +155,7 @@ contract StableCoinStrategy is BaseStrategy {
 
         uint256 curveDaiAmt = _amount.sub(usdcAmt.add(usdtAmt).add(daiAmt));
 
-        // dai to usdc
+        // dai to usdc (using curve exchange)
        usdcAmt =  ICurveExchange(CURVE_POOL).exchange_underlying(CURVE_DAI_INDEX, CURVE_USDC_INDEX, usdcAmt, 1);
         // dai to usdt
        usdtAmt =  ICurveExchange(CURVE_POOL).exchange_underlying(CURVE_DAI_INDEX, CURVE_USDT_INDEX, usdtAmt, 1);
@@ -163,7 +163,7 @@ contract StableCoinStrategy is BaseStrategy {
         // deposit remaining dai to CURVE Pool, getting back am3CRV token
        uint256 _am3CRVamt =  ICurveExchange(CURVE_POOL).add_liquidity([curveDaiAmt, 0,0 ], 1, true);
        am3CRVBalance = am3CRVBalance.add(_am3CRVamt);
-        // also deposit the am3CRV tokens to the reward receiver to keep getting WMATIC & CRV rewards
+        // also stake the am3CRV tokens to the curve reward receiver to get WMATIC & CRV rewards
         IRewardsOnlyGauge(CURVE_REWARDS_GAUGE).deposit(_am3CRVamt, address(this), true);
 
         // deposit to AAVE Lending Pool and get back amDAI, amUSDC, amUSDT tokens
@@ -175,6 +175,7 @@ contract StableCoinStrategy is BaseStrategy {
     /// @dev utility function to withdraw everything for migration
     function _withdrawAll() internal override {
         _withdrawSome(balanceOfPool());
+        emit WithdrawAll(balanceOfPool());
     }
 
     /// @dev withdraw the specified amount of want, paying off any necessary debt for the conversion
@@ -190,6 +191,8 @@ contract StableCoinStrategy is BaseStrategy {
        _sub = _withDrawFromCurvePool(_sub);
        _sub =  _withDrawFromAAVEPool(amUSDC, usdc, 10**12, _sub, CURVE_USDC_INDEX);
        _sub = _withDrawFromAAVEPool(amUSDT, usdt, 10**12, _sub, CURVE_USDT_INDEX );
+
+       emit Withdraw(_amount);
 
         return _amount;
     }
@@ -208,7 +211,7 @@ contract StableCoinStrategy is BaseStrategy {
                _exAmt =  ILendingPool(LENDING_POOL).withdraw(_token, _balance.div(_d), address(this));
             }
 
-            // exchange to want/DAI
+            // exchange to DAI (for usdc & usdt pools)
             if (_exIndex != 0) {
                 ICurveExchange(CURVE_POOL).exchange_underlying(_exIndex,CURVE_DAI_INDEX, _exAmt, 1);
             }
@@ -274,9 +277,6 @@ contract StableCoinStrategy is BaseStrategy {
 
         uint256 earned = IERC20Upgradeable(want).balanceOf(address(this)).sub(_before);
 
-        /// @notice Keep this in so you get paid!
-        // (uint256 governancePerformanceFee, uint256 strategistPerformanceFee) = _processPerformanceFees(earned);
-
         /// @dev Harvest event that every strategy MUST have, see BaseStrategy
         emit Harvest(earned, block.number);
 
@@ -290,6 +290,7 @@ contract StableCoinStrategy is BaseStrategy {
         if (balanceOfWant() > 0) {
             _deposit(balanceOfWant());
         }
+        emit Tend(balanceOfWant());
     }
 
     function chanceAllocations(uint16[4] memory _allocations) external {

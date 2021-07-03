@@ -238,7 +238,7 @@ class StrategyCoreResolver:
                 assert approx(
                     before.get("strategy.balanceOfPool"),
                     after.get("strategy.balanceOfPool") + expectedWithdraw,
-                    1,
+                    40,
                 )
 
         # The total want between the strategy and sett should be less after than before

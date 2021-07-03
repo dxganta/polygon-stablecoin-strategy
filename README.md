@@ -6,17 +6,17 @@ This mix is configured for use with [Ganache](https://github.com/trufflesuite/ga
 
 ### Deposit
 The strategy takes [DAI](https://polygonscan.com/token/0x8f3cf7ad23cd3cadbd9735aff958023239c6a063) as deposit. The DAI is then deposited into 4 pools according to their respective allocation percentages: 
-  1. [AAVE DAI pool](https://app.aave.com/markets)
-  2. AAVE USDC Pool
-  3. AAVE USDT Pool
+  1. [AAVE DAI pool](https://app.aave.com/reserve-overview/DAI-0x8f3cf7ad23cd3cadbd9735aff958023239c6a0630xd05e3e715d945b59290df0ae8ef85c1bdb684744)
+  2. [AAVE USDC Pool](https://app.aave.com/reserve-overview/USDC-0x2791bca1f2de4661ed88a30c99a7a9449aa841740xd05e3e715d945b59290df0ae8ef85c1bdb684744)
+  3. [AAVE USDT Pool](https://app.aave.com/reserve-overview/USDT-0xc2132d05d31c914a87c6611c10748aeb04b58e8f0xd05e3e715d945b59290df0ae8ef85c1bdb684744)
   4. [CURVE aDAi-aUSDC-aUSDT Pool](https://polygon.curve.fi/aave)
 
-The allocation percentages are calculated at strategy creation based on the APY of the pool. Then can be changed by the strategist later. Also, the required amoutn of DAI is converted into USDC & USDT for transfer into the USDC & USDT pools.
+The allocation percentages are calculated at strategy creation based on the APY of the respective pools. Then can be changed by the strategist later. Also, the required amoutn of DAI is converted into USDC & USDT for transfer into the USDC & USDT pools.
 
 ### Harvest & Compounding
 The Matic rewards from each of the pools are first converted into DAI, and then deposited back into the strategy. 
 
-The Curve pool also gives CRV rewards which is also converted into DAI and deposited back into the strategy.
+The Curve pool gives CRV rewards (in addition to WMATIC rewards) which is also converted into DAI and deposited back into the strategy.
 
 ### Withdrawing Funds
 Withdrawing is a bit tricky here because we have funds in multiple pools. The way the algorithm is coded here is that when a user wants to withdraw funds the strategy will first try to withdraw funds from the AAVE-DAI pool, if not enough then it will withdraw the rest from the CURVE pool, then from the USDC-pool (converting the USDC into DAI on the way) and then the USDT pool.
@@ -29,10 +29,10 @@ As of July 2, 2021 the yields from the separate pools are as follows (including 
   4. Curve Pool -> 10.67% APY
 
 Taking into account their allocation percentages the net APY of the strategy will be<br>
-### = (17% * 3.86%) + (14% * 3.22%) + (21% * 4.63%) + (48% * 10.67) = <strong>7.2% APY</strong>
+### = (20% * 3.86%) + (16% * 3.22%) + (25% * 4.63%) + (39% * 10.67) = <strong>6.6% APY</strong>
 
 ## Documentation
-A general template for the Strategy, Controller, Vault has generated taken from https://github.com/GalloDaSballo/badger-strategy-mix-v1
+A general template for the Strategy, Controller, Vault has generated from https://github.com/GalloDaSballo/badger-strategy-mix-v1
 
 ### The Vault Contract ([/contracts/deps/SettV3.sol](https://github.com/realdiganta/dbr-aave-polygon-strategy/blob/main/contracts/deps/SettV3.sol)) has 3 prime functions
 
@@ -63,7 +63,7 @@ access: Only Authorized Actors
 ### The Controller Contract ([/contracts/deps/Controller.sol](https://github.com/realdiganta/dbr-aave-polygon-strategy/blob/main/contracts/deps/Controller.sol))
 The prime function of the Controller is to set, approve & remove Strategies for the Vault and act as a middleman between the Vault & the strategy(ies).
 <br><br>
-### The Strategy Contract ([/contracts/StableCoinStrategy.sol](https://github.com/realdiganta/dbr-aave-polygon-strategy/blob/main/contracts/StableCoinStrategy.sol)) :
+### The Strategy Contract ([/contracts/MyStrategy.sol](https://github.com/realdiganta/dbr-aave-polygon-strategy/blob/main/contracts/MyStrategy.sol)) :
  
 <strong>deposit()</strong>
 ```
@@ -128,18 +128,16 @@ pip install -r requirements.txt
 
 To deploy the Strategy in a development environment:
 
-1. Run Scripts for Deployment
+1. Compile the contracts 
+```
+  brownie compile
+```
+
+2. Run Scripts for Deployment
 ```
   brownie run deploy
 ```
 Deployment will set up a Vault, Controller and deploy your strategy
-
-2. Testing
-
-To run the tests:
-
-```
-brownie test
 ```
 
 3. Run the test deployment in the console and interact with it
@@ -157,7 +155,6 @@ brownie test
   {
       'controller': 0x602C71e4DAC47a042Ee7f46E0aee17F94A3bA0B6,
       'deployer': 0x66aB6D9362d4F35596279692F0251Db635165871,
-      'lpComponent': 0x028171bCA77440897B824Ca71D1c56caC55b68A3,
       'rewardToken': 0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9,
       'sett': 0x6951b5Bd815043E3F842c1b026b0Fa888Cc2DD85,
       'strategy': 0x9E4c14403d7d9A8A782044E86a93CAE09D7B2ac9,
@@ -183,3 +180,6 @@ $ brownie run deployment --network mainnet
 ```
 
 You will be prompted to enter your keystore password, and then the contract will be deployed.
+
+## Notes
+The Reward Gauge of the Curve Pool seems to be not giving any CRV/WMATIC rewards in the simulation on the forked polygon mainnet. This is because the [reward_gauge](https://github.com/curvefi/curve-dao-contracts/blob/master/contracts/gauges/RewardsOnlyGauge.vy) contract of the curve pool has a manual component, where a particular authorized address called reward_receiver has to withdraw the rewards from a [rewards_claimer](https://github.com/curvefi/curve-dao-contracts/blob/master/contracts/streamers/RewardClaimer.vy) contract to the rewards_gauge periodically. But this should not be a problem on the real deployment of the contract to the real Polygon Mainnet.
