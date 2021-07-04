@@ -149,6 +149,12 @@ abstract contract BaseStrategy is PausableUpgradeable, SettAccessControl {
             // Require that difference between expected and actual values is less than the deviation threshold percentage
             require(diff <= _amount.mul(withdrawalMaxDeviationThreshold).div(MAX_FEE), "base-strategy/withdraw-exceed-max-deviation-threshold");
         }
+
+        // Return the amount actually withdrawn if less than amount requested
+        uint256 _toWithdraw = MathUpgradeable.min(_postWithdraw, _amount);
+
+        // Transfer remaining to Vault to handle withdrawal
+        _transferToVault(_toWithdraw);
     }
 
     // NOTE: must exclude any tokens used in the yield
