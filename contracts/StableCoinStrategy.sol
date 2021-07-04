@@ -20,11 +20,6 @@ import {
     BaseStrategy
 } from "../deps/BaseStrategy.sol";
 
-// _deposit()
-// Deposit 50% to DAI, 50% to USDC AAVE Pools
-// Take 75% USDT Loan on above collateral
-// Deposit the USDT in Curve Pools
-// Deposit the am3CRV tokens from Curve pool to Curve Reward Gauge
 
 // harvest()
 // harvest MATIC rewards from AAVE USDC & DAI Pools
@@ -36,7 +31,13 @@ import {
 // deposit idle DAI held by the strategy back into the pool
 
 // withdrawSome()
-// 
+// repay equal amount USDT loan to open up DAI or USDC
+// withdraw the DAI
+// What if there is not enough DAI? How do you move to USDC?
+// If you have repayed all USDT, then just check the amount of USDC you have and directly withdraw from that.
+
+// LTCR always needs to be below 75%. That is the ratio between the amount of money I have in collateral
+// and the amount of loan I have taken, needs to be 0.75 or less.
 
 
 contract MyStrategy is BaseStrategy {
@@ -47,13 +48,14 @@ contract MyStrategy is BaseStrategy {
     // address public want // Inherited from BaseStrategy, the token the strategy wants, swaps into and tries to grow
     address public constant amDAI = 0x27F8D03b3a2196956ED754baDc28D73be8830A6e; // Token we provide liquidity with
     address public constant amUSDC = 0x1a13F4Ca1d028320A707D99520AbFefca3998b7F;
-    address public constant amUSDT = 0x60D55F02A771d515e077c9C2403a1ef324885CeC;
     address public constant reward = 0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270; // WMATIC
 
     address public constant usdc = 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174;
     address public constant usdt = 0xc2132D05D31c914a87C6611C10748AEb04B58e8F;
     address public constant am3CRV = 0xE7a24EF0C5e95Ffb0f6684b813A78F2a3AD7D171;
     address public constant crv = 0x172370d5Cd63279eFa6d502DAB29171933a610AF;
+
+    address public constant debtUSDT = 0x8038857FD47108A07d1f6Bf652ef1cBeC279A2f3;
 
     // the same indexes are for amDai, amUSDC, amUSDT for curve exchanges
     int128 public constant CURVE_DAI_INDEX = 0;
@@ -110,12 +112,11 @@ contract MyStrategy is BaseStrategy {
     }
 
     /// @dev Balance of want currently held in strategy positions
-    /// @notice since usdc & usdt has 6 decimals, multiply their balance with 10^12
+    /// @notice since usdc  has 6 decimals, multiply  balance with 10^12
     /// to get an accurate representation of balanceOfPool in DAI terms
     function balanceOfPool() public override view returns (uint256) {
         return IERC20Upgradeable(amDAI).balanceOf(address(this))
-        .add(IERC20Upgradeable(amUSDC).balanceOf(address(this)).mul(10**12))
-        .add(am3CRVBalance);
+        .add(IERC20Upgradeable(amUSDC).balanceOf(address(this)).mul(10**12));
     }
 
     /// @dev Balance of a particular token fot this contract
@@ -126,15 +127,14 @@ contract MyStrategy is BaseStrategy {
 
     // @dev These are the tokens that cannot be moved except by the vault
     function getProtectedTokens() public override view returns (address[] memory) {
-        address[] memory protectedTokens = new address[](8);
+        address[] memory protectedTokens = new address[](7);
         protectedTokens[0] = want;
         protectedTokens[1] = usdc;
         protectedTokens[2] = usdt; 
         protectedTokens[3] = amDAI;
         protectedTokens[4] = amUSDC;
-        protectedTokens[5] = amUSDT;
-        protectedTokens[6] = reward;
-        protectedTokens[7] = am3CRV;
+        protectedTokens[5] = reward;
+        protectedTokens[6] = am3CRV;
         return protectedTokens;
     }
 
@@ -154,11 +154,9 @@ contract MyStrategy is BaseStrategy {
     /// @notice When this function is called, the controller has already sent want to this
     /// @notice Just get the current balance and then invest accordingly
     function _deposit(uint256 _amount) internal override {
-        // 50 % usdc& 50% dai
+        // 50 % usdc & 50% dai
         uint256 usdcAmt = _amount.mul(500).div(1000);
         uint256 daiAmt = _amount.sub(usdcAmt);
-
-        // uint256 curveDaiAmt = _amount.sub(usdcAmt.add(usdtAmt).add(daiAmt));
 
         // dai to usdc (using curve exchange)
        usdcAmt =  ICurveExchange(CURVE_POOL).exchange_underlying(CURVE_DAI_INDEX, CURVE_USDC_INDEX, usdcAmt, 1);
@@ -174,14 +172,10 @@ contract MyStrategy is BaseStrategy {
         ILendingPool(LENDING_POOL).borrow(usdt, _loanAmt, 2, 0, address(this));
     
         // deposit the borrowed USDT to CURVE Pool, getting back am3CRV token
-       uint256 _am3CRVamt =  ICurveExchange(CURVE_POOL).add_liquidity([0, 0,_loanAmt ], 1, true);
+       uint256 _am3CRVamt =  ICurveExchange(CURVE_POOL).add_liquidity([0, 0, balanceOfToken(usdt)], 1, true);
        am3CRVBalance = am3CRVBalance.add(_am3CRVamt);
         // also stake the am3CRV tokens to the curve reward receiver to get WMATIC & CRV rewards
         IRewardsOnlyGauge(CURVE_REWARDS_GAUGE).deposit(_am3CRVamt, address(this), true);
-    }
-
-    function testDeposit(uint256 _amount) external {
-        _deposit(_amount);
     }
 
 
@@ -200,10 +194,13 @@ contract MyStrategy is BaseStrategy {
 
         uint256 _sub = _amount;
 
-       _sub =  _withDrawFromAAVEPool(amDAI, want, 1, _sub, 0);
-       _sub = _withDrawFromCurvePool(_sub);
-       _sub =  _withDrawFromAAVEPool(amUSDC, usdc, 10**12, _sub, CURVE_USDC_INDEX);
-       _sub = _withDrawFromAAVEPool(amUSDT, usdt, 10**12, _sub, CURVE_USDT_INDEX );
+        // first withdraw USDT from CURVE equal to _amount and repay loan equal to _amount
+        _withdrawUSDTAndRepay(_sub);
+
+        // then withdraw DAI from DAI pool
+       _sub = _withDrawFromAAVEPool(amDAI, want, 1, _amount, CURVE_DAI_INDEX, CURVE_DAI_INDEX);
+       // withdraw from USDC pool if anything left
+       _withDrawFromAAVEPool(amUSDC, usdc, 10**12, _sub, CURVE_USDC_INDEX, CURVE_DAI_INDEX);
 
        emit Withdraw(_amount);
 
@@ -212,7 +209,7 @@ contract MyStrategy is BaseStrategy {
 
 
     /// @param _d => number to make up for the difference in decimals between dai & usdc/usdt
-    function _withDrawFromAAVEPool(address _aToken, address _token, uint256 _d, uint256 _amount, int128 _exIndex) internal returns (uint256) {
+    function _withDrawFromAAVEPool(address _aToken, address _token, uint256 _d, uint256 _amount, int128 _fromIndex, int128 _toIndex) internal returns (uint256) {
         uint256 _balance = balanceOfToken(_aToken).mul(_d);
         if (_amount > 0 && _balance > 0) {
             uint256 _exAmt;
@@ -224,36 +221,51 @@ contract MyStrategy is BaseStrategy {
                _exAmt =  ILendingPool(LENDING_POOL).withdraw(_token, _balance.div(_d), address(this));
             }
 
-            // exchange to DAI (for usdc & usdt pools)
-            if (_exIndex != 0) {
-                ICurveExchange(CURVE_POOL).exchange_underlying(_exIndex,CURVE_DAI_INDEX, _exAmt, 1);
+            // exchange to other token if needed (unless both are same)
+            if (_fromIndex != _toIndex) {
+                ICurveExchange(CURVE_POOL).exchange_underlying(_fromIndex, _toIndex, _exAmt, 1);
             }
         }
         return _amount;
     }
 
-    function _withDrawFromCurvePool(uint256 _amount) internal returns (uint256) {
-        uint256 _balance = am3CRVBalance;
-        if (_amount > 0 && _balance > 0) {
-            if (_balance >= _amount) {
-                // first withdraw am3CRV from curve rewards pool
-                IRewardsOnlyGauge(CURVE_REWARDS_GAUGE).withdraw(_amount,true);
-                // then burn am3CRV and withdraw DAI from CURVE StableSwap pool
-                ICurveExchange(CURVE_POOL).remove_liquidity_one_coin(_amount, CURVE_DAI_INDEX, 1, true);
-                _amount = 0;
-                am3CRVBalance = am3CRVBalance.sub(_amount);
-            } else {
-                IRewardsOnlyGauge(CURVE_REWARDS_GAUGE).withdraw(_balance, true);
-                ICurveExchange(CURVE_POOL).remove_liquidity_one_coin(_balance, CURVE_DAI_INDEX, 1, true);
-                am3CRVBalance = 0;
-                _amount = _amount.sub(_balance);
+    function _withdrawUSDTAndRepay(uint256 _amount) internal {
+        if (am3CRVBalance > 0) {
+            // if _amount is greater than current USDT balance 
+            if (_amount > am3CRVBalance) {
+                _amount = am3CRVBalance;
+            }
+
+            // first withdraw am3CRV from curve rewards pool
+            IRewardsOnlyGauge(CURVE_REWARDS_GAUGE).withdraw(_amount,true);
+
+            // then burn am3CRV and withdraw USDT from CURVE StableSwap pool
+            ICurveExchange(CURVE_POOL).remove_liquidity_one_coin(_amount, CURVE_USDT_INDEX, 1, true);
+            am3CRVBalance = am3CRVBalance.sub(_amount);
+
+            // then repay that _amount of USDT loan to CURVE
+            ILendingPool(LENDING_POOL).repay(usdt, balanceOfToken(usdt), 2, address(this));
+
+            // if there is no USDT in the CURVE pool left then the rest will be just interest
+            // so it will be a good idea to jusy pay off the interest to open up collateral
+            if (am3CRVBalance == 0) {
+                // check remaining loan amount 
+                uint256 _loan = balanceOfToken(debtUSDT);
+                if (_loan > 0) {
+                    uint256 _daiAmt = _loan.mul(10**12).mul(10002).div(10000); // plus add 0.02% extra to account for slippage
+                    // withdraw dai from LENDING_POOL and convert to usdt to pay loan
+                   _daiAmt =  _withDrawFromAAVEPool(amDAI, want, 1, _daiAmt, CURVE_DAI_INDEX, CURVE_USDT_INDEX);
+                   // if dai was not enough then exchange some usdc to usdt too (to pay the loan)
+                   _withDrawFromAAVEPool(amUSDC, usdc, 10**12, _daiAmt, CURVE_USDC_INDEX, CURVE_USDT_INDEX);
+                    // pay off remaining loan
+                    ILendingPool(LENDING_POOL).repay(usdt, balanceOfToken(usdt), 2, address(this));
+                }
             }
         }
-        return _amount;
     }
 
     /// @dev Harvest from strategy mechanics, realizing increase in underlying position
-    function harvest() external whenNotPaused returns (uint256 harvested) {
+    function harvest() public whenNotPaused returns (uint256 harvested) {
         _onlyAuthorizedActors();
 
         uint256 _before = IERC20Upgradeable(want).balanceOf(address(this));
@@ -262,7 +274,7 @@ contract MyStrategy is BaseStrategy {
         address[] memory assets = new address[](3);
         assets[0] = amDAI;
         assets[1] = amUSDC;
-        assets[2] = amUSDT;
+        assets[2] = debtUSDT;
         IAaveIncentivesController(INCENTIVES_CONTROLLER).claimRewards(assets, type(uint256).max, address(this));
 
         // Get WMATIC & CRV rewards from CURVE pool
@@ -297,7 +309,7 @@ contract MyStrategy is BaseStrategy {
     }
 
     /// @dev Rebalance, Compound or Pay off debt here
-    function tend() external whenNotPaused {
+    function tend() public whenNotPaused {
         _onlyAuthorizedActors();
 
         if (balanceOfWant() > 0) {
@@ -306,7 +318,14 @@ contract MyStrategy is BaseStrategy {
         emit Tend(balanceOfWant());
     }
 
-    /// @dev Set the Loan To Collateral ration for USDT Loan
+    /// @dev harvest & tend together
+    function compound() external whenNotPaused {
+        _onlyAuthorizedActors();
+        harvest();
+        tend();
+    }
+
+    /// @dev Set the Loan To Collateral ratio for USDT Loan
     function setLTCR(uint128 _ltcr) external{
         _onlyAuthorizedActors();
         require(_ltcr <= 750, "75% max");

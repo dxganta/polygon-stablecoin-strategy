@@ -81,7 +81,7 @@ def deploy():
     router.swapExactETHForTokens(
         0,  #  Mint out
         ["0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270", WANT],
-        strategy,
+        deployer,
         9999999999999999,
         {"from": deployer, "value": 10000 * 10**18}
     )
