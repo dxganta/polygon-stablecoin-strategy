@@ -5,31 +5,35 @@ This mix is configured for use with [Ganache](https://github.com/trufflesuite/ga
 ## How it Works
 
 ### Deposit
-The strategy takes [DAI](https://polygonscan.com/token/0x8f3cf7ad23cd3cadbd9735aff958023239c6a063) as deposit. The DAI is then deposited into 4 pools according to their respective allocation percentages: 
-  1. [AAVE DAI pool](https://app.aave.com/reserve-overview/DAI-0x8f3cf7ad23cd3cadbd9735aff958023239c6a0630xd05e3e715d945b59290df0ae8ef85c1bdb684744)
-  2. [AAVE USDC Pool](https://app.aave.com/reserve-overview/USDC-0x2791bca1f2de4661ed88a30c99a7a9449aa841740xd05e3e715d945b59290df0ae8ef85c1bdb684744)
-  3. [AAVE USDT Pool](https://app.aave.com/reserve-overview/USDT-0xc2132d05d31c914a87c6611c10748aeb04b58e8f0xd05e3e715d945b59290df0ae8ef85c1bdb684744)
-  4. [CURVE aDAi-aUSDC-aUSDT Pool](https://polygon.curve.fi/aave)
+The strategy takes [DAI](https://polygonscan.com/token/0x8f3cf7ad23cd3cadbd9735aff958023239c6a063) as deposit. 50% of the DAI is deposited into the [AAVE DAI Pool]((https://app.aave.com/reserve-overview/DAI-0x8f3cf7ad23cd3cadbd9735aff958023239c6a0630xd05e3e715d945b59290df0ae8ef85c1bdb684744)) and the other 50% is converted to USDC and deposited into the [AAVE USDC Pool](https://app.aave.com/reserve-overview/USDC-0x2791bca1f2de4661ed88a30c99a7a9449aa841740xd05e3e715d945b59290df0ae8ef85c1bdb684744).
+Then a USDT loan is taken on the above deposit at 70% Loan to Collateral Ratio. The USDT is deposited into the [CURVE aDAi-aUSDC-aUSDT Pool](https://polygon.curve.fi/aave)
 
-The allocation percentages are calculated at strategy creation based on the APY of the respective pools. Then can be changed by the strategist later. Also, the required amoutn of DAI is converted into USDC & USDT for transfer into the USDC & USDT pools.
+```
+For e.g. Supoose the user deposits 10K DAI. 5K DAI is put into the AAVE DAI Pool & and the other 5K is converted to USDC and put into the USDC Pool. Then a 7K USDT Loan is taken on the the above collateral and put into the Curve Pool.
+```
+
 
 ### Harvest & Compounding
-The Matic rewards from each of the pools are first converted into DAI, and then deposited back into the strategy. 
+The Matic rewards from the deposit & borrow pools are first converted into DAI, and then deposited back into the strategy. 
 
 The Curve pool gives CRV rewards (in addition to WMATIC rewards) which is also converted into DAI and deposited back into the strategy.
 
 ### Withdrawing Funds
-Withdrawing is a bit tricky here because we have funds in multiple pools. The way the algorithm is coded here is that when a user wants to withdraw funds the strategy will first try to withdraw funds from the AAVE-DAI pool, if not enough then it will withdraw the rest from the CURVE pool, then from the USDC-pool (converting the USDC into DAI on the way) and then the USDT pool.
+Withdrawing is a bit tricky here because we have funds in multiple pools & on top of that we have almost all of our deposits locked as collateral.<br>
+
+First the strategy needs to withdraw the required amount of USDT from the curve pool and pay back the loan in AAVE to open up collateral for the user to withdraw. So, it burns the am3CRV tokens from the CURVE pool, withdraws USDT, and repays the loan. But since our loan is building up interest, what if the strategy doesn't have enough USDT in the CURVE pool to pay the loan? In that case, we convert DAI from our AAVE Deposit Pool to USDT to pay back the loan. In case, even the DAI is not enough, we use USDC.
+
+Next, the strategy simply withdraws DAI from the AAVE-DAI Deposit Pool and sends them back to the user. If the AAVE-DAI pool doesnt have enough DAI to withdraw, then it withdraws USDC from the AAVE-USDC Pool, converts it to DAI and sends them to the user.
  
 ## Expected Yield
-As of July 2, 2021 the yields from the separate pools are as follows (including compounding of the matic/curve rewards daily):
-  1. AAVE-DAI Pool -> 3.86% APY
-  2. AAVE-USDC Pool -> 3.22% APY
-  3. AAVE-USDT Pool -> 4.63% APY
-  4. Curve Pool -> 10.67% APY
+As of July 5, 2021 the net yields from the separate pools are as follows (including compounding of the matic/curve rewards daily):
+  1. AAVE-DAI Deposit Pool -> 3.99% APY
+  2. AAVE-USDC Deposit Pool -> 3.27% APY
+  3. AAVE-USDT Borrow Pool -> <strong>-</strong>0.80% APY (-ve)
+  4. Curve Pool -> 10.09% APY
 
 Taking into account their allocation percentages the net APY of the strategy will be<br>
-### = (20% * 3.86%) + (16% * 3.22%) + (25% * 4.63%) + (39% * 10.67) = <strong>6.6% APY</strong>
+### = (50% * 3.99%) + (50% * 3.27%) - (70% * 0.80%) + (70% * 10.09) = <strong>10.13% APY</strong>
 
 ## Usage
 
@@ -119,11 +123,18 @@ info: withdraws all the funds from the strategy.
 access: Only Controller
 ```
 
-<strong>changeAllocations(uint16[4] _allocations)</strong>
+<strong>compound()</strong>
 ```
-params: (_allocations) => list of allocations for the different pools. (where 100 will be 10%) with order being [dai, usdc, usdt, curve]
+info: calls the harvest & tend functions together in one transaction 
 
-info: The values in the list must add up to 1000. This function may typically be called by the strategist when the APYs in the various pools changes to have a better allocation of the funds of the strategy for higher net APY.
+access: Only Authorized Actors
+```
+
+<strong>setLTCR(uint256 _ltcr)</strong>
+```
+params: (_ltcr) => The loan to collateral ratio for the USDT Loan (700 means 70%)
+
+info: Maximum loan to collateral ratio is 75%. So set a number less than or equal to 750.
 
 access: Only Authorized Actors
 ```
