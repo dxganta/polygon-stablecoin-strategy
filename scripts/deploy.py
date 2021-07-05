@@ -90,7 +90,6 @@ def deploy():
         deployer=deployer,
         controller=controller,
         vault=sett,
-        sett=sett,
         strategy=strategy,
         # guestList=guestList,
         want=want,

@@ -51,10 +51,12 @@ There is a <strong>harvest()</strong> function in the Strategy Contract which ha
 
 After the harvest() you may call the <strong>tend()</strong> function which will deposit any idle DAI held by the strategy contract back into the pools for yield generation.
 
-(Ofcourse all the conversions & deposits are automated inside the strategy, you just have to call the above 3 functions)
+Or you can just call the <strong>compound()</strong> function which will call the harvest and tend functions together in one transaction.
+
+(All the conversions & deposits are automated inside the strategy, you just have to call the above functions)
 
 ## Documentation
-A general template for the Strategy, Controller, Vault has generated from https://github.com/GalloDaSballo/badger-strategy-mix-v1
+A general template for the Strategy, Controller, Vault has been generated from https://github.com/GalloDaSballo/badger-strategy-mix-v1
 
 ### The Vault Contract ([/contracts/deps/SettV3.sol](https://github.com/realdiganta/dbr-aave-polygon-strategy/blob/main/contracts/deps/SettV3.sol)) has 3 prime functions
 
@@ -76,7 +78,7 @@ access: public
 
 <strong>earn()</strong>
 ```
-info: Deposits the DAI held by the Vault Contract to the controller. The Controller will then deposit into the Strategy for yield-generation.
+info: Deposits the DAI held by the Vault Contract into the Strategy for yield-generation.
 
 access: Only Authorized Actors
 ```
@@ -185,7 +187,6 @@ Deployment will set up a Vault, Controller and deploy your strategy
       'controller': 0x602C71e4DAC47a042Ee7f46E0aee17F94A3bA0B6,
       'deployer': 0x66aB6D9362d4F35596279692F0251Db635165871,
       'rewardToken': 0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9,
-      'sett': 0x6951b5Bd815043E3F842c1b026b0Fa888Cc2DD85,
       'strategy': 0x9E4c14403d7d9A8A782044E86a93CAE09D7B2ac9,
       'vault': 0x6951b5Bd815043E3F842c1b026b0Fa888Cc2DD85,
       'want': 0x6B175474E89094C44Da98b954EedeAC495271d0F

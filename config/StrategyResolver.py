@@ -78,6 +78,5 @@ class StrategyResolver(StrategyCoreResolver):
         strategy = self.manager.strategy
         return {
             "amDAI": strategy.amDAI(),
-            "amUSDC": strategy.amUSDC(),
-            "amUSDT": strategy.amUSDT()
+            "amUSDC": strategy.amUSDC()
         }
