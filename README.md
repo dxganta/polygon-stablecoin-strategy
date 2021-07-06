@@ -143,6 +143,14 @@ access: Only Authorized Actors
 
 ## Installation and Setup
 
+1. Install Brownie & Ganache-CLI, if you haven't already.
+
+2. Copy the .env.example file, and rename it to .env
+
+3. Sign up for Infura and generate an API key. Store it in the WEB3_INFURA_PROJECT_ID environment variable.
+
+4. Sign up for PolygonScan and generate an API key. This is required for fetching source codes of the polygon mainnet contracts we will be interacting with. Store the API key in the ETHERSCAN_TOKEN environment variable.
+
 Install the dependencies in the package
 ```
 ## Javascript dependencies
@@ -153,6 +161,16 @@ pip install virtualenv
 virtualenv venv
 source venv/bin/activate
 pip install -r requirements.txt
+```
+
+Add Polygon to your local brownie networks
+```
+brownie networks import network-config.yaml
+```
+
+Increase the default balance of an account (since we are dealing with Matic here)
+```
+brownie networks modify polygon-main-fork default_balance="1000000 ether"
 ```
 
 ## Basic Use
@@ -169,9 +187,14 @@ To deploy the Strategy in a development environment:
   brownie run deploy
 ```
 Deployment will set up a Vault, Controller and deploy your strategy
+
+
+3. Run Tests
+```
+brownie test
 ```
 
-3. Run the test deployment in the console and interact with it
+4. Run the test deployment in the console and interact with it
 ```python
   brownie console
   deployed = run("deploy")
@@ -200,7 +223,7 @@ Deployment will set up a Vault, Controller and deploy your strategy
 ```
 ## Deployment
 
-You can have a look at the deployment script at (/scripts/deploy.py)
+<strong>You can have a look at the deployment script at (/scripts/deploy.py)</strong>
 
 When you are finished testing and ready to deploy to the mainnet:
 
