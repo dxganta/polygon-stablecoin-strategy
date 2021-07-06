@@ -21,25 +21,6 @@ import {
 } from "../deps/BaseStrategy.sol";
 
 
-// harvest()
-// harvest MATIC rewards from AAVE USDC & DAI Pools
-// harvest MATIC & CRV rewards from Curve Pool
-// convert MATIC to DAI
-// convert CRV to DAI
-
-// tend()
-// deposit idle DAI held by the strategy back into the pool
-
-// withdrawSome()
-// repay equal amount USDT loan to open up DAI or USDC
-// withdraw the DAI
-// What if there is not enough DAI? How do you move to USDC?
-// If you have repayed all USDT, then just check the amount of USDC you have and directly withdraw from that.
-
-// LTCR always needs to be below 75%. That is the ratio between the amount of money I have in collateral
-// and the amount of loan I have taken, needs to be 0.75 or less.
-
-
 contract MyStrategy is BaseStrategy {
     using SafeERC20Upgradeable for IERC20Upgradeable;
     using AddressUpgradeable for address;

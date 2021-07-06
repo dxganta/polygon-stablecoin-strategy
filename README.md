@@ -27,13 +27,13 @@ Next, the strategy simply withdraws DAI from the AAVE-DAI Deposit Pool and sends
  
 ## Expected Yield
 As of July 5, 2021 the net yields from the separate pools are as follows (including compounding of the matic/curve rewards daily):
-  1. AAVE-DAI Deposit Pool -> 3.99% APY
-  2. AAVE-USDC Deposit Pool -> 3.27% APY
-  3. AAVE-USDT Borrow Pool -> <strong>-</strong>0.80% APY (-ve)
-  4. Curve Pool -> 10.09% APY
+  1. AAVE-DAI Deposit Pool -> 4.01% APY
+  2. AAVE-USDC Deposit Pool -> 3.38% APY
+  3. AAVE-USDT Borrow Pool -> <strong>-</strong>0.94% APY (-ve)
+  4. Curve Pool -> 11.28% APY
 
 Taking into account their allocation percentages the net APY of the strategy will be<br>
-### = (50% * 3.99%) + (50% * 3.27%) - (70% * 0.80%) + (70% * 10.09) = <strong>10.13% APY</strong>
+### = (50% * 4.01%) + (50% * 3.38%) - (70% * 0.94%) + (70% * 11.28) = <strong>10.93% APY</strong>
 
 ## Usage
 
@@ -238,5 +238,3 @@ You will be prompted to enter your keystore password, and then the contract will
 
 ## Notes
 1. The Reward Gauge of the Curve Pool seems to be not giving any CRV/WMATIC rewards in the simulation on the forked polygon mainnet. This is because the [reward_gauge](https://github.com/curvefi/curve-dao-contracts/blob/master/contracts/gauges/RewardsOnlyGauge.vy) contract of the curve pool has a manual component, where a particular authorized address called reward_receiver has to withdraw the rewards from a [rewards_claimer](https://github.com/curvefi/curve-dao-contracts/blob/master/contracts/streamers/RewardClaimer.vy) contract to the rewards_gauge periodically. But this should not be a problem on the real deployment of the contract to the real Polygon Mainnet.
-
-2. We are calling a Vault, Sett here.
